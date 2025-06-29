@@ -1,0 +1,27 @@
+{
+  "name": "storysounds",
+  "version": "1.0.0",
+  "description": "Speak a vibe, a moment, or a mood. We'll match it with music that gets it.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adelxh/StorySounds.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/adelxh/StorySounds/issues"
+  },
+  "homepage": "https://github.com/adelxh/StorySounds#readme",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.1",
+    "openai": "^5.8.2"
+  }
+}
