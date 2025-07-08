@@ -1,4 +1,3 @@
-// backend/routes/transcribe.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -225,7 +224,10 @@ async function enhanceTracksWithYouTube(spotifyTracks) {
     const track = spotifyTracks[i];
     let enhancedTrack = { ...track };
     
-    console.log(`\n📀 Track ${i + 1}/${spotifyTracks.length}: "${track.name}" by "${track.artist}"`);
+
+    const artistName = track.artists && track.artists.length > 0 ? track.artists[0].name : 'Unknown Artist'; 
+
+    console.log(`\n📀 Track ${i + 1}/${spotifyTracks.length}: "${track.name}" by "${artistName}"`);
     
     if (track.preview_url) {
       console.log('  ✅ Spotify preview available, skipping YouTube search');
@@ -233,7 +235,7 @@ async function enhanceTracksWithYouTube(spotifyTracks) {
     } else {
       console.log('  ❌ No Spotify preview, searching YouTube...');
       
-      const youtubePreview = await getYouTubePreview(track.name, track.artist);
+      const youtubePreview = await getYouTubePreview(track.name, artistName);
       
       if (youtubePreview) {
         enhancedTrack.youtube_preview = youtubePreview;
@@ -304,13 +306,14 @@ async function generateSongRecommendations(transcription) {
   try {
     const prompt = `Based on this user's request: "${transcription}"
 
-Generate a list of 15 specific songs that match their request. Include songs from the mentioned genres, countries, or themes.
+Generate a list of 15 specific songs that match their request. Include songs from the mentioned genres, countries, languages, or themes.
 Please suggest songs that would be perfect for this. Think about:
 - The exact mood and vibe they're describing
 - their age group and what statistically that age group listens to
 - any cultural/regional preferences mentioned
 - the energy level they might want
 - musical styles that would match their description 
+- pay close attention to the language they're requesting for example (give me russian songs) will mean you should PRIORITIZE the songs in that specific language.  
 
 Please focus on this: 
 - popular enough to be easily found
@@ -332,7 +335,7 @@ Be specific with real song titles and artist names. Focus on popular and recogni
       messages: [
         {
           role: "system",
-          content: "You are a music expert who gives personalized recommendations just like a knowledgeable friend would. You understand nuanced music preferences and can match songs to specific moods, cultures, and vibes perfectly. Always respond with valid JSON."
+          content: "You are a music DJ who gives personalized recommendations just like a knowledgeable friend would. You understand nuanced music preferences and can match songs to specific moods, cultures, and vibes perfectly. Always respond with valid JSON."
         },
         {
           role: "user",
@@ -438,7 +441,7 @@ router.post('/', upload.single('file'), async (req, res) => {
         file: audioStream,
         model: 'whisper-1',
         response_format: 'json',
-        language: 'en',
+        // language: 'en', 
       });
 
       transcriptionText = transcription.text;
@@ -471,6 +474,18 @@ router.post('/', upload.single('file'), async (req, res) => {
         console.log(`  Mapped artist: "${track.artists && track.artists.length > 0 ? track.artists[0].name : 'Unknown Artist'}"`);
       });
       console.log('=== END SPOTIFY MAPPING DEBUG ===');
+
+      console.log('=== ARTIST EXTRACTION DEBUG ==='); 
+      spotifyTracks.forEach((track, index) => {
+  console.log(`Track ${index + 1}: "${track.name}"`);
+  console.log(`  Raw artists array:`, track.artists);
+  console.log(`  Artists length:`, track.artists?.length);
+  console.log(`  First artist:`, track.artists?.[0]);
+  console.log(`  First artist name:`, track.artists?.[0]?.name);
+  console.log(`  Final mapped artist:`, track.artists && track.artists.length > 0 ? track.artists[0].name : 'Unknown Artist');
+  console.log('  ---');
+});
+console.log('=== END ARTIST DEBUG ===');
 
       // Step 5: Enhance with YouTube previews
       console.log('Enhancing tracks with YouTube previews...');

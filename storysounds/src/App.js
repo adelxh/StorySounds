@@ -36,7 +36,10 @@ const App = () => {
     setIsLoaded(true);
     
     const handleMouseMove = (e) => {
-      setMousePosition({ x: e.clientX, y: e.clientY });
+      if (!youtubeModal) {
+
+        setMousePosition({ x: e.clientX, y: e.clientY });
+      }
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -52,7 +55,7 @@ const App = () => {
         currentPreview.pause();
       }
     };
-  }, [currentPreview]);
+  }, [youtubeModal]);
   
   const startTimer = () => {
     setRecordingTime(0);
@@ -457,13 +460,16 @@ const App = () => {
       </div>
 
       {/* Mouse follower */}
-      <div 
+      {!youtubeModal && (
+         <div 
         className="mouse-follower"
         style={{
           left: mousePosition.x,
           top: mousePosition.y,
         }}
       ></div>
+      )}
+     
 
       {/* Main content */}
       <div className={`container ${isLoaded ? 'loaded' : ''}`}>
