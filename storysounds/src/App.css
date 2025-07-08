@@ -1007,3 +1007,254 @@ body {
     font-size: 0.75rem;
   }
 }
+
+/* Add these styles to your existing App.css for the hybrid preview system */
+
+/* Preview source indicators */
+.preview-sources {
+  margin: 0.5rem 0;
+}
+
+.preview-source {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.preview-source.spotify {
+  background: rgba(30, 215, 96, 0.2);
+  color: #1ed760;
+  border: 1px solid rgba(30, 215, 96, 0.3);
+}
+
+.preview-source.youtube {
+  background: rgba(255, 0, 0, 0.2);
+  color: #ff4444;
+  border: 1px solid rgba(255, 0, 0, 0.3);
+}
+
+.preview-source.none {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Enhanced preview button for playing state */
+.preview-button.playing {
+  background: rgba(30, 215, 96, 0.3);
+  border-color: rgba(30, 215, 96, 0.6);
+  animation: pulse-spotify 2s ease-in-out infinite;
+}
+
+@keyframes pulse-spotify {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(30, 215, 96, 0.4);
+  }
+  50% { 
+    box-shadow: 0 0 0 10px rgba(30, 215, 96, 0);
+  }
+}
+
+/* YouTube modal styles */
+.youtube-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+.youtube-modal {
+  background: rgba(20, 20, 20, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: slideIn 0.3s ease;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-header h4 {
+  color: white;
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.close-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.1);
+}
+
+.modal-content {
+  padding: 1.5rem;
+}
+
+.modal-content iframe {
+  width: 100%;
+  height: 315px;
+  border-radius: 12px;
+}
+
+/* YouTube link styling */
+.youtube-link {
+  background: rgba(255, 0, 0, 0.2);
+  border: 1px solid rgba(255, 0, 0, 0.4);
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.3s ease;
+}
+
+.youtube-link:hover {
+  background: rgba(255, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Enhanced preview button styling */
+.preview-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 15px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.3s ease;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.preview-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.preview-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.no-preview {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+  font-style: italic;
+  padding: 0.4rem 0.8rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 15px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to { 
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Mobile responsive for hybrid system */
+@media (max-width: 768px) {
+  .track-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  .preview-button {
+    min-width: unset;
+  }
+  
+  .youtube-modal {
+    margin: 1rem;
+    max-width: calc(100vw - 2rem);
+  }
+  
+  .modal-content iframe {
+    height: 250px;
+  }
+  
+  .summary-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .preview-sources {
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-content iframe {
+    height: 200px;
+  }
+  
+  .modal-content {
+    padding: 1rem;
+  }
+  
+  .modal-header {
+    padding: 1rem;
+  }
+  
+  .modal-header h4 {
+    font-size: 1rem;
+  }
+  
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+}

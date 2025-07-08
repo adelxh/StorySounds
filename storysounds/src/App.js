@@ -14,6 +14,10 @@ const App = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   
+  // Hybrid preview state
+  const [youtubeModal, setYoutubeModal] = useState(null);
+  const [currentPreview, setCurrentPreview] = useState(null);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [transcription, setTranscription] = useState('');
@@ -44,9 +48,12 @@ const App = () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
+      if (currentPreview) {
+        currentPreview.pause();
+      }
     };
-  }, []);
-
+  }, [currentPreview]);
+  
   const startTimer = () => {
     setRecordingTime(0);
     timerRef.current = setInterval(() => {
@@ -61,6 +68,102 @@ const App = () => {
     }
   };
 
+  // Enhanced hybrid preview handler
+  const handlePreviewClick = (track) => {
+    // Priority 1: Use Spotify preview if available
+    if (track.preview_url) {
+      handleSpotifyPreview(track);
+      return;
+    }
+    
+    // Priority 2: Use YouTube preview if Spotify not available
+    if (track.youtube_preview) {
+      handleYouTubePreview(track);
+      return;
+    }
+    
+    // No preview available
+    alert('No preview available for this track');
+  };
+
+  // Spotify preview handler
+  const handleSpotifyPreview = (track) => {
+    // If clicking the same track that's already playing, pause it
+    if (currentPreview && currentPreview.src === track.preview_url && isPreviewPlaying) {
+      currentPreview.pause();
+      setIsPreviewPlaying(false);
+      return;
+    }
+
+    // Stop any currently playing preview
+    if (currentPreview) {
+      currentPreview.pause();
+      currentPreview.currentTime = 0;
+    }
+
+    // Close YouTube modal if open
+    setYoutubeModal(null);
+
+    // Create and play new audio
+    const audio = new Audio(track.preview_url);
+    audio.volume = 0.7;
+    
+    // Auto-stop after 30 seconds
+    setTimeout(() => {
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+        setIsPreviewPlaying(false);
+        setCurrentPreview(null);
+      }
+    }, 30000);
+
+    audio.onended = () => {
+      setIsPreviewPlaying(false);
+      setCurrentPreview(null);
+    };
+
+    audio.onerror = () => {
+      alert('Error playing Spotify preview');
+      setIsPreviewPlaying(false);
+      setCurrentPreview(null);
+    };
+
+    audio.play().then(() => {
+      setCurrentPreview(audio);
+      setIsPreviewPlaying(true);
+    }).catch(error => {
+      console.error('Error playing audio:', error);
+      alert('Error playing preview');
+    });
+  };
+
+  // YouTube preview handler
+  const handleYouTubePreview = (track) => {
+    console.log('Opening YouTube preview for:', track.name);
+  
+  // Stop any Spotify preview
+  if (currentPreview) {
+    currentPreview.pause();
+    setCurrentPreview(null);
+    setIsPreviewPlaying(false);
+  }
+
+  // Check if modal is already open for this track
+  if (youtubeModal && youtubeModal.videoId === track.youtube_preview.videoId) {
+    console.log('Modal already open for this track, closing');
+    setYoutubeModal(null);
+    return;
+  }
+
+  // Open YouTube modal
+  setYoutubeModal({
+    videoId: track.youtube_preview.videoId,
+    song: track.name,
+    artist: track.artist,
+    embedUrl: track.youtube_preview.embedUrl
+  });
+}
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -100,6 +203,44 @@ const App = () => {
       
       const data = await response.json();
       
+      // Enhanced debugging for hybrid system
+      console.log('=== HYBRID PREVIEW DEBUG ===');
+      console.log('Full response:', data);
+      console.log('Spotify tracks array:', data.spotifyTracks);
+
+      if (data.spotifyTracks && data.spotifyTracks.length > 0) {
+        console.log(`\n📊 Analyzing ${data.spotifyTracks.length} tracks:`);
+        
+        data.spotifyTracks.forEach((track, index) => {
+          console.log(`\nTrack ${index + 1}: "${track.name}" by "${track.artist}"`);
+          console.log(`  Spotify preview: ${track.preview_url ? '✅ Available' : '❌ Null'}`);
+          console.log(`  YouTube preview: ${track.youtube_preview ? '✅ Available' : '❌ Null'}`);
+          
+          if (track.youtube_preview) {
+            console.log(`  YouTube details:`, track.youtube_preview);
+          }
+          
+          if (!track.preview_url && !track.youtube_preview) {
+            console.log(`  ⚠️ NO PREVIEWS AVAILABLE for this track`);
+          }
+        });
+        
+        // Summary
+        const spotifyCount = data.spotifyTracks.filter(t => t.preview_url).length;
+        const youtubeCount = data.spotifyTracks.filter(t => t.youtube_preview).length;
+        const noPreviewCount = data.spotifyTracks.filter(t => !t.preview_url && !t.youtube_preview).length;
+        
+        console.log(`\n📈 HYBRID PREVIEW SUMMARY:`);
+        console.log(`  🎧 Spotify previews: ${spotifyCount}`);
+        console.log(`  📺 YouTube previews: ${youtubeCount}`);
+        console.log(`  ❌ No previews: ${noPreviewCount}`);
+        console.log(`  📊 Total coverage: ${((spotifyCount + youtubeCount) / data.spotifyTracks.length * 100).toFixed(1)}%`);
+        
+      } else {
+        console.log('❌ No Spotify tracks found in response');
+      }
+      console.log('=== END HYBRID DEBUG ===');
+
       // Update state with all the response data
       setTranscription(data.transcription || 'No transcription available');
       setAiRecommendations(data.aiRecommendations || []);
@@ -109,7 +250,8 @@ const App = () => {
       console.log('Processing successful:', {
         transcription: data.transcription,
         foundTracks: data.spotifyTracks?.length || 0,
-        totalRecommendations: data.aiRecommendations?.length || 0
+        totalRecommendations: data.aiRecommendations?.length || 0,
+        playlistSummary: data.playlistSummary
       });
       
     } catch (error) {
@@ -227,6 +369,14 @@ const App = () => {
   };
 
   const handleNewRecording = () => {
+    // Stop any playing previews
+    if (currentPreview) {
+      currentPreview.pause();
+      setCurrentPreview(null);
+      setIsPreviewPlaying(false);
+    }
+    setYoutubeModal(null);
+
     if (audioUrl) {
       URL.revokeObjectURL(audioUrl);
     }
@@ -261,6 +411,33 @@ const App = () => {
   const handleTestConnection = async () => {
     const isConnected = await testBackendConnection();
     alert(isConnected ? 'Backend connection successful!' : 'Backend connection failed. Make sure the server is running on port 5000.');
+  };
+
+  // YouTube Modal Component
+  const YouTubeModal = ({ modal, onClose }) => {
+    if (!modal) return null;
+
+    return (
+      <div className="youtube-modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className="youtube-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h4>{modal.song} - {modal.artist}</h4>
+            <button className="close-button" onClick={onClose}>×</button>
+          </div>
+          <div className="modal-content">
+            <iframe
+              width="560"
+              height="315"
+              src={modal.embedUrl}
+              title="YouTube preview"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            ></iframe>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -387,6 +564,7 @@ const App = () => {
                           <p>🎤 Transcribing your audio...</p>
                           <p>🤖 Generating song recommendations...</p>
                           <p>🎵 Finding tracks on Spotify...</p>
+                          <p>📺 Adding YouTube previews...</p>
                           <p>📋 Creating your playlist...</p>
                         </div>
                       </div>
@@ -413,21 +591,37 @@ const App = () => {
                       </div>
                     )}
 
+                    {/* Enhanced Playlist Summary */}
                     {playlistSummary && (
                       <div className="playlist-summary">
                         <div className="summary-stats">
                           <div className="stat">
-                            <span className="stat-number">{playlistSummary.totalRecommended}</span>
+                            <span className="stat-number">{playlistSummary.totalRecommended || 0}</span>
                             <span className="stat-label">Songs Recommended</span>
                           </div>
                           <div className="stat">
-                            <span className="stat-number">{playlistSummary.foundOnSpotify}</span>
+                            <span className="stat-number">{playlistSummary.foundOnSpotify || 0}</span>
                             <span className="stat-label">Found on Spotify</span>
                           </div>
+                          {playlistSummary.totalPreviews !== undefined && (
+                            <div className="stat">
+                              <span className="stat-number">{playlistSummary.totalPreviews}</span>
+                              <span className="stat-label">Total Previews</span>
+                            </div>
+                          )}
+                          {playlistSummary.spotifyPreviews !== undefined && playlistSummary.youtubePreviews !== undefined && (
+                            <div className="stat">
+                              <span className="stat-number">
+                                {playlistSummary.spotifyPreviews}/{playlistSummary.youtubePreviews}
+                              </span>
+                              <span className="stat-label">Spotify/YouTube</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
 
+                    {/* Enhanced Spotify Tracks with Hybrid Previews */}
                     {spotifyTracks.length > 0 && (
                       <div className="spotify-playlist">
                         <h4>Your Spotify Playlist:</h4>
@@ -448,18 +642,46 @@ const App = () => {
                                 {track.recommendation && (
                                   <p className="track-reason">💭 {track.recommendation.reason}</p>
                                 )}
-                                <div className="track-actions">
+                                
+                                {/* Preview source indicator */}
+                                <div className="preview-sources">
                                   {track.preview_url && (
-                                    <button 
-                                      className="preview-button"
-                                      onClick={() => {
-                                        const audio = new Audio(track.preview_url);
-                                        audio.play();
-                                      }}
-                                    >
-                                      🎵 Preview
-                                    </button>
+                                    <span className="preview-source spotify">🎧 Spotify Preview</span>
                                   )}
+                                  {!track.preview_url && track.youtube_preview && (
+                                    <span className="preview-source youtube">📺 YouTube Preview</span>
+                                  )}
+                                  {!track.preview_url && !track.youtube_preview && (
+                                    <span className="preview-source none">❌ No Preview</span>
+                                  )}
+                                </div>
+
+                                <div className="track-actions">
+                                  {/* Enhanced preview button */}
+                                  {(track.preview_url || track.youtube_preview) ? (
+                                    <button 
+                                      className={`preview-button ${
+                                        track.preview_url 
+                                          ? (currentPreview && currentPreview.src === track.preview_url && isPreviewPlaying ? 'playing' : '')
+                                          : ''
+                                      }`}
+                                      onClick={() => handlePreviewClick(track)}
+                                    >
+                                      {track.preview_url ? (
+                                        // Spotify preview
+                                        currentPreview && currentPreview.src === track.preview_url && isPreviewPlaying 
+                                          ? '⏸️ Pause' 
+                                          : '🎧 Preview'
+                                      ) : (
+                                        // YouTube preview
+                                        '📺 Preview'
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span className="no-preview">No preview available</span>
+                                  )}
+                                  
+                                  {/* Spotify link */}
                                   {track.external_urls?.spotify && (
                                     <a 
                                       href={track.external_urls.spotify}
@@ -468,6 +690,18 @@ const App = () => {
                                       className="spotify-link"
                                     >
                                       🎧 Open in Spotify
+                                    </a>
+                                  )}
+                                  
+                                  {/* YouTube link (if available) */}
+                                  {track.youtube_preview && (
+                                    <a 
+                                      href={track.youtube_preview.youtubeUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="youtube-link"
+                                    >
+                                      📺 YouTube
                                     </a>
                                   )}
                                 </div>
@@ -481,7 +715,7 @@ const App = () => {
                             className="retry-button"
                             onClick={handleRetryProcessing}
                           >
-                            Generate New Playlist
+                            🔄 Generate New Playlist
                           </button>
                         </div>
                       </div>
@@ -531,6 +765,12 @@ const App = () => {
           </div>
         </footer>
       </div>
+
+      {/* YouTube Modal */}
+      <YouTubeModal 
+        modal={youtubeModal} 
+        onClose={() => setYoutubeModal(null)} 
+      />
     </div>
   );
 };
