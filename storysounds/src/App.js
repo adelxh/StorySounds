@@ -2,7 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // API Base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://9b86ebd23326.ngrok-free.app';
+const fetchWithNgrokHeaders = async (url, options = {}) => {
+  const defaultOptions = {
+    headers: {
+      'ngrok-skip-browser-warning': 'true',
+      ...options.headers
+    },
+    ...options
+  };
+  
+  return fetch(url, defaultOptions);
+};
+
 
 const App = () => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -31,6 +43,143 @@ const App = () => {
   const audioRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+  const [spotifyAuth, setSpotifyAuth] = useState({
+  isAuthenticated: false,
+  user: null,
+  isLoading: false
+});
+const [playlistCreation, setPlaylistCreation] = useState({
+  isCreating: false,
+  error: null,
+  success: null
+});
+
+useEffect(() => {
+  checkSpotifyAuthStatus();
+}, []);
+useEffect(() => {
+  // Check for Spotify auth callback in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const spotifyAuth = urlParams.get('spotify_auth');
+  const userId = urlParams.get('user_id');
+  const userName = urlParams.get('user_name');
+  const error = urlParams.get('error');
+  
+  if (spotifyAuth === 'success' && userId) {
+    console.log('✅ Spotify auth callback detected:', { userId, userName });
+    
+    // Store user ID
+    localStorage.setItem('spotify_user_id', userId);
+    
+    // Update auth state
+    setSpotifyAuth({
+      isAuthenticated: true,
+      user: { id: userId, display_name: decodeURIComponent(userName) },
+      isLoading: false
+    });
+    
+    // RESTORE PREVIOUS STATE
+    const savedState = localStorage.getItem('app_state_before_auth');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        console.log('🔄 Restoring app state:', state);
+        
+        // Restore all the state
+        setTranscription(state.transcription || '');
+        setSpotifyTracks(state.spotifyTracks || []);
+        setAiRecommendations(state.aiRecommendations || []);
+        setPlaylistSummary(state.playlistSummary || null);
+        
+        // Set audio URL if it existed (but we can't restore the blob)
+        if (state.audioUrl) {
+          setAudioUrl(state.audioUrl);
+        }
+        
+        // Clean up saved state
+        localStorage.removeItem('app_state_before_auth');
+        
+        console.log('✅ App state restored successfully!');
+      } catch (error) {
+        console.error('❌ Error restoring state:', error);
+        localStorage.removeItem('app_state_before_auth');
+      }
+    }
+    
+    // Clean up URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+    
+    console.log('🎉 Spotify authentication complete with state restored!');
+  } else if (error) {
+    console.error('❌ Spotify auth error:', error);
+    setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
+    
+    // Clean up URL and any saved state
+    window.history.replaceState({}, document.title, window.location.pathname);
+    localStorage.removeItem('app_state_before_auth');
+  }
+}, []);
+
+useEffect(() => {
+  // On app load, check if there's saved state to restore
+  const savedState = localStorage.getItem('app_state_before_auth');
+  if (savedState) {
+    try {
+      const state = JSON.parse(savedState);
+      // Only restore if it's recent (within last 10 minutes)
+      const isRecent = Date.now() - state.timestamp < 10 * 60 * 1000;
+      
+      if (isRecent) {
+        console.log('🔄 Restoring saved state on page load:', state);
+        setTranscription(state.transcription || '');
+        setSpotifyTracks(state.spotifyTracks || []);
+        setAiRecommendations(state.aiRecommendations || []);
+        setPlaylistSummary(state.playlistSummary || null);
+      } else {
+        console.log('🗑️ Saved state is too old, removing...');
+        localStorage.removeItem('app_state_before_auth');
+      }
+    } catch (error) {
+      console.error('❌ Error parsing saved state:', error);
+      localStorage.removeItem('app_state_before_auth');
+    }
+  }
+}, []);
+
+// Add this useEffect after your existing useEffects in App.js:
+useEffect(() => {
+  // Check for Spotify auth callback in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const spotifyAuth = urlParams.get('spotify_auth');
+  const userId = urlParams.get('user_id');
+  const userName = urlParams.get('user_name');
+  const error = urlParams.get('error');
+  
+  if (spotifyAuth === 'success' && userId) {
+    console.log('✅ Spotify auth callback detected:', { userId, userName });
+    
+    // Store user ID
+    localStorage.setItem('spotify_user_id', userId);
+    
+    // Update auth state
+    setSpotifyAuth({
+      isAuthenticated: true,
+      user: { id: userId, display_name: userName },
+      isLoading: false
+    });
+    
+    // Clean up URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+    
+    console.log('🎉 Spotify authentication complete!');
+  } else if (error) {
+    console.error('❌ Spotify auth error:', error);
+    setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
+    
+    // Clean up URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}, []);
 
   useEffect(() => {
     setIsLoaded(true);
@@ -140,6 +289,244 @@ const App = () => {
       alert('Error playing preview');
     });
   };
+ const checkSpotifyAuthStatus = async () => {
+  const savedUserId = localStorage.getItem('spotify_user_id');
+  console.log('🔍 Checking auth status for user:', savedUserId);
+  
+  if (!savedUserId) {
+    console.log('❌ No saved user ID found');
+    return;
+  }
+  
+  try {
+    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/status/${savedUserId}`);
+    const data = await response.json();
+    
+    console.log('📊 Auth status response:', data);
+    
+    if (data.authenticated) {
+      console.log('✅ User is authenticated');
+      setSpotifyAuth({
+        isAuthenticated: true,
+        user: data.user,
+        isLoading: false
+      });
+    } else {
+      console.log('❌ User not authenticated on server');
+      localStorage.removeItem('spotify_user_id');
+      setSpotifyAuth({
+        isAuthenticated: false,
+        user: null,
+        isLoading: false
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error checking Spotify auth:', error);
+    localStorage.removeItem('spotify_user_id');
+    setSpotifyAuth({
+      isAuthenticated: false,
+      user: null,
+      isLoading: false
+    });
+  }
+};
+
+// Replace your handleSpotifyLogin function with this:
+
+const handleSpotifyLogin = async () => {
+  setSpotifyAuth(prev => ({ ...prev, isLoading: true }));
+  
+  try {
+    // SAVE CURRENT STATE BEFORE REDIRECT
+    const stateToSave = {
+      transcription,
+      spotifyTracks,
+      aiRecommendations,
+      playlistSummary,
+      audioUrl,
+      audioBlob: audioBlob ? 'has_audio' : null, // Can't save blob, just flag
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem('app_state_before_auth', JSON.stringify(stateToSave));
+    console.log('💾 Saved app state before auth:', stateToSave);
+    
+    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/login`);
+    const data = await response.json();
+    
+    if (data.authUrl) {
+      console.log('🚀 Redirecting to Spotify auth...');
+      window.location.href = data.authUrl;
+    } else {
+      throw new Error('No auth URL received');
+    }
+  } catch (error) {
+    console.error('❌ Error initiating Spotify login:', error);
+    setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
+  }
+};
+
+
+
+// Handle Spotify logout
+const handleSpotifyLogout = async () => {
+  const userId = localStorage.getItem('spotify_user_id');
+  if (userId) {
+    try {
+      await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/logout/${userId}`, {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  }
+  
+  localStorage.removeItem('spotify_user_id');
+  setSpotifyAuth({
+    isAuthenticated: false,
+    user: null,
+    isLoading: false
+  });
+};
+
+// Create Spotify playlist
+const createSpotifyPlaylist = async () => {
+  if (!spotifyAuth.isAuthenticated || !spotifyTracks.length) return;
+  
+  setPlaylistCreation({ isCreating: true, error: null, success: null });
+  
+  try {
+    // Generate playlist name based on transcription
+    const playlistName = generatePlaylistName(transcription);
+    
+    // Format tracks for Spotify API (need to convert to spotify:track:id format)
+    const formattedTracks = spotifyTracks.map(track => ({
+      id: `spotify:track:${track.id}`
+    }));
+    
+    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/create-playlist`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: spotifyAuth.user.id,
+        playlistName: playlistName,
+        description: `Created from audio: "${transcription.substring(0, 100)}..."`,
+        tracks: formattedTracks
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok && data.success) {
+      setPlaylistCreation({
+        isCreating: false,
+        error: null,
+        success: data.playlist
+      });
+    } else {
+      throw new Error(data.error || 'Failed to create playlist');
+    }
+  } catch (error) {
+    console.error('Error creating playlist:', error);
+    setPlaylistCreation({
+      isCreating: false,
+      error: error.message,
+      success: null
+    });
+  }
+};
+
+// Generate playlist name from transcription
+const generatePlaylistName = (transcription) => {
+  const text = transcription.toLowerCase();
+  
+  // Look for genre/mood keywords
+  const genreKeywords = ['rock', 'pop', 'jazz', 'classical', 'hip hop', 'country', 'electronic', 'indie'];
+  const moodKeywords = ['chill', 'energetic', 'sad', 'happy', 'workout', 'study', 'party', 'relaxing'];
+  
+  for (const genre of genreKeywords) {
+    if (text.includes(genre)) {
+      return `My ${genre.charAt(0).toUpperCase() + genre.slice(1)} Playlist`;
+    }
+  }
+  
+  for (const mood of moodKeywords) {
+    if (text.includes(mood)) {
+      return `${mood.charAt(0).toUpperCase() + mood.slice(1)} Vibes`;
+    }
+  }
+  
+  // Default name with timestamp
+  const date = new Date().toLocaleDateString();
+  return `StorySound Playlist - ${date}`;
+};
+
+
+const SpotifyAuthSection = () => (
+  <div className="spotify-auth-section">
+    {!spotifyAuth.isAuthenticated ? (
+      <div className="auth-prompt">
+        <h4>🎵 Save to Spotify</h4>
+        <p>Connect your Spotify account to create playlists from your audio</p>
+        <button 
+          onClick={handleSpotifyLogin}
+          disabled={spotifyAuth.isLoading}
+          className="spotify-login-button"
+        >
+          {spotifyAuth.isLoading ? 'Connecting...' : 'Connect Spotify'}
+        </button>
+      </div>
+    ) : (
+      <div className="auth-success">
+        <div className="user-info">
+          <span className="welcome-text">
+            🎧 Connected as {spotifyAuth.user.display_name || spotifyAuth.user.id}
+          </span>
+          <button onClick={handleSpotifyLogout} className="logout-button">
+            Disconnect
+          </button>
+        </div>
+        
+        {spotifyTracks.length > 0 && (
+          <div className="playlist-creation">
+            <button 
+              onClick={createSpotifyPlaylist}
+              disabled={playlistCreation.isCreating}
+              className="create-playlist-button"
+            >
+              {playlistCreation.isCreating ? 'Creating Playlist...' : 'Create Spotify Playlist'}
+            </button>
+            
+            {playlistCreation.error && (
+              <div className="creation-error">
+                <p>❌ {playlistCreation.error}</p>
+              </div>
+            )}
+            
+            {playlistCreation.success && (
+              <div className="creation-success">
+                <p>✅ Playlist created successfully!</p>
+                <a 
+                  href={playlistCreation.success.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="playlist-link"
+                >
+                  Open "{playlistCreation.success.name}" in Spotify
+                </a>
+                <p className="track-count">
+                  {playlistCreation.success.tracks_added} tracks added
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+);
 
   // YouTube preview handler
   const handleYouTubePreview = (track) => {
@@ -194,7 +581,7 @@ const App = () => {
       
       console.log('Processing audio and generating playlist...');
       
-      const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
+      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/transcribe`, {
         method: 'POST',
         body: formData,
       });
@@ -402,7 +789,7 @@ const App = () => {
 
   const testBackendConnection = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/transcribe`, {
+      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/transcribe`, {
         method: 'GET',
       });
       return response.ok;
@@ -717,6 +1104,7 @@ const App = () => {
                         </div>
                         
                         <div className="playlist-actions">
+                          <SpotifyAuthSection />
                           <button 
                             className="retry-button"
                             onClick={handleRetryProcessing}

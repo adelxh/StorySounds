@@ -1,3 +1,4 @@
+// backend/routes/transcribe.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -10,12 +11,12 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY, 
 });
 
-
+// Use environment variables first, fallback to hardcoded (not recommended for production)
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
-
+// Debug: Check API keys
 console.log('=== API KEYS CHECK ===');
 console.log('OpenAI API Key:', !!openai.apiKey ? '✅ Present' : '❌ Missing');
 console.log('Spotify Client ID:', !!SPOTIFY_CLIENT_ID ? '✅ Present' : '❌ Missing');
@@ -23,7 +24,7 @@ console.log('Spotify Client Secret:', !!SPOTIFY_CLIENT_SECRET ? '✅ Present' : 
 console.log('YouTube API Key:', !!YOUTUBE_API_KEY ? '✅ Present' : '❌ Missing');
 console.log('=== END API KEYS CHECK ===');
 
-
+// Configure multer to save files with proper extensions
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = 'uploads/';
