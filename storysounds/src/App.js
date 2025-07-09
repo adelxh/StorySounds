@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // API Base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://9b86ebd23326.ngrok-free.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://8bb268dcc0d5.ngrok-free.app';
 const fetchWithNgrokHeaders = async (url, options = {}) => {
   const defaultOptions = {
     headers: {
@@ -57,6 +57,7 @@ const [playlistCreation, setPlaylistCreation] = useState({
 useEffect(() => {
   checkSpotifyAuthStatus();
 }, []);
+
 useEffect(() => {
   // Check for Spotify auth callback in URL
   const urlParams = new URLSearchParams(window.location.search);
@@ -64,6 +65,8 @@ useEffect(() => {
   const userId = urlParams.get('user_id');
   const userName = urlParams.get('user_name');
   const error = urlParams.get('error');
+  
+  console.log('🔍 Checking URL params:', { spotifyAuth, userId, userName, error });
   
   if (spotifyAuth === 'success' && userId) {
     console.log('✅ Spotify auth callback detected:', { userId, userName });
@@ -74,7 +77,7 @@ useEffect(() => {
     // Update auth state
     setSpotifyAuth({
       isAuthenticated: true,
-      user: { id: userId, display_name: decodeURIComponent(userName) },
+      user: { id: userId, display_name: decodeURIComponent(userName || userId) },
       isLoading: false
     });
     
@@ -85,31 +88,42 @@ useEffect(() => {
         const state = JSON.parse(savedState);
         console.log('🔄 Restoring app state:', state);
         
-        // Restore all the state
-        setTranscription(state.transcription || '');
-        setSpotifyTracks(state.spotifyTracks || []);
-        setAiRecommendations(state.aiRecommendations || []);
-        setPlaylistSummary(state.playlistSummary || null);
+        // Only restore if it's recent (within last 10 minutes)
+        const isRecent = Date.now() - state.timestamp < 10 * 60 * 1000;
         
-        // Set audio URL if it existed (but we can't restore the blob)
-        if (state.audioUrl) {
-          setAudioUrl(state.audioUrl);
+        if (isRecent) {
+          // Restore all the state
+          setTranscription(state.transcription || '');
+          setSpotifyTracks(state.spotifyTracks || []);
+          setAiRecommendations(state.aiRecommendations || []);
+          setPlaylistSummary(state.playlistSummary || null);
+          
+          // Set audio URL if it existed (but we can't restore the blob)
+          if (state.audioUrl) {
+            setAudioUrl(state.audioUrl);
+          }
+          
+          console.log('✅ App state restored successfully!');
+        } else {
+          console.log('🗑️ Saved state is too old, skipping restore');
         }
         
         // Clean up saved state
         localStorage.removeItem('app_state_before_auth');
         
-        console.log('✅ App state restored successfully!');
       } catch (error) {
         console.error('❌ Error restoring state:', error);
         localStorage.removeItem('app_state_before_auth');
       }
+    } else {
+      console.log('ℹ️ No saved state to restore');
     }
     
     // Clean up URL
     window.history.replaceState({}, document.title, window.location.pathname);
     
-    console.log('🎉 Spotify authentication complete with state restored!');
+    console.log('🎉 Spotify authentication complete!');
+    
   } else if (error) {
     console.error('❌ Spotify auth error:', error);
     setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
@@ -119,67 +133,16 @@ useEffect(() => {
     localStorage.removeItem('app_state_before_auth');
   }
 }, []);
-
 useEffect(() => {
-  // On app load, check if there's saved state to restore
-  const savedState = localStorage.getItem('app_state_before_auth');
-  if (savedState) {
-    try {
-      const state = JSON.parse(savedState);
-      // Only restore if it's recent (within last 10 minutes)
-      const isRecent = Date.now() - state.timestamp < 10 * 60 * 1000;
-      
-      if (isRecent) {
-        console.log('🔄 Restoring saved state on page load:', state);
-        setTranscription(state.transcription || '');
-        setSpotifyTracks(state.spotifyTracks || []);
-        setAiRecommendations(state.aiRecommendations || []);
-        setPlaylistSummary(state.playlistSummary || null);
-      } else {
-        console.log('🗑️ Saved state is too old, removing...');
-        localStorage.removeItem('app_state_before_auth');
-      }
-    } catch (error) {
-      console.error('❌ Error parsing saved state:', error);
-      localStorage.removeItem('app_state_before_auth');
-    }
-  }
-}, []);
-
-// Add this useEffect after your existing useEffects in App.js:
-useEffect(() => {
-  // Check for Spotify auth callback in URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const spotifyAuth = urlParams.get('spotify_auth');
-  const userId = urlParams.get('user_id');
-  const userName = urlParams.get('user_name');
-  const error = urlParams.get('error');
-  
-  if (spotifyAuth === 'success' && userId) {
-    console.log('✅ Spotify auth callback detected:', { userId, userName });
-    
-    // Store user ID
-    localStorage.setItem('spotify_user_id', userId);
-    
-    // Update auth state
-    setSpotifyAuth({
-      isAuthenticated: true,
-      user: { id: userId, display_name: userName },
-      isLoading: false
-    });
-    
-    // Clean up URL
-    window.history.replaceState({}, document.title, window.location.pathname);
-    
-    console.log('🎉 Spotify authentication complete!');
-  } else if (error) {
-    console.error('❌ Spotify auth error:', error);
-    setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
-    
-    // Clean up URL
-    window.history.replaceState({}, document.title, window.location.pathname);
-  }
-}, []);
+  console.log('📊 Current App State:', {
+    transcription: transcription?.substring(0, 50) + '...',
+    spotifyTracksCount: spotifyTracks?.length || 0,
+    aiRecommendationsCount: aiRecommendations?.length || 0,
+    playlistSummary: playlistSummary,
+    spotifyAuth: spotifyAuth,
+    hasAudioUrl: !!audioUrl
+  });
+}, [transcription, spotifyTracks, aiRecommendations, playlistSummary, spotifyAuth, audioUrl]);
 
   useEffect(() => {
     setIsLoaded(true);
@@ -228,19 +191,18 @@ useEffect(() => {
       return;
     }
     
-    // Priority 2: Use YouTube preview if Spotify not available
+    
     if (track.youtube_preview) {
       handleYouTubePreview(track);
       return;
     }
-    
-    // No preview available
+
     alert('No preview available for this track');
   };
 
-  // Spotify preview handler
+
   const handleSpotifyPreview = (track) => {
-    // If clicking the same track that's already playing, pause it
+
     if (currentPreview && currentPreview.src === track.preview_url && isPreviewPlaying) {
       currentPreview.pause();
       setIsPreviewPlaying(false);
@@ -895,7 +857,7 @@ const SpotifyAuthSection = () => (
                 Speak a vibe, a moment, or a mood. We'll transcribe it and create a Spotify playlist that matches perfectly.
               </p>
 
-              {!audioBlob ? (
+              {!audioBlob && !transcription ? (
                 <button 
                   className={`cta-button ${isRecording ? 'recording' : ''}`}
                   onClick={isRecording ? handleStopRecording : handleStartRecording}
@@ -1149,6 +1111,7 @@ const SpotifyAuthSection = () => (
             </div>
           </div>
         </main>
+       
 
         <footer className="footer">
           <div className="footer-content">
