@@ -205,10 +205,52 @@ async function testYouTubeWithRealSong() {
     return false;
   }
 }
+async function searchSingleYouTubePreview(track) {
+  const artistName = track.artists && track.artists.length > 0 
+    ? track.artists[0].name 
+    : 'Unknown Artist';
 
-// FIXED: Enhancement function
-async function enhanceTracksWithYouTube(spotifyTracks) {
-  console.log(`\n🎵 Starting YouTube enhancement for ${spotifyTracks.length} tracks...`);
+  try {
+    // Only search YouTube if no Spotify preview exists
+    if (track.preview_url) {
+      return {
+        ...track,
+        searchType: 'skipped_has_spotify',
+        searchSuccess: true
+      };
+    }
+
+    const youtubePreview = await getYouTubePreview(track.name, artistName);
+    
+    if (youtubePreview) {
+      return {
+        ...track,
+        youtube_preview: youtubePreview,
+        searchType: 'youtube_found',
+        searchSuccess: true
+      };
+    } else {
+      return {
+        ...track,
+        searchType: 'youtube_not_found',
+        searchSuccess: true // Still successful, just no preview found
+      };
+    }
+    
+  } catch (error) {
+    console.error(`❌ YouTube search error for "${track.name}":`, error.message);
+    return {
+      ...track,
+      searchType: 'youtube_error',
+      searchSuccess: false,
+      error: error.message
+    };
+  }
+}
+
+async function enhanceTracksWithYouTube(spotifyTracks, maxConcurrency = 3) {
+  console.log(`\n🎵 Starting parallel YouTube enhancement for ${spotifyTracks.length} tracks...`);
+  const startTime = Date.now();
   
   // Test YouTube API first
   const apiWorking = await testYouTubeWithRealSong();
@@ -217,47 +259,79 @@ async function enhanceTracksWithYouTube(spotifyTracks) {
     return spotifyTracks;
   }
   
-  const enhancedTracks = [];
-  let youtubeSuccessCount = 0;
-  let spotifyPreviewCount = 0;
+  // Separate tracks that need YouTube search vs those that don't
+  const tracksWithSpotify = spotifyTracks.filter(t => t.preview_url);
+  const tracksNeedingYouTube = spotifyTracks.filter(t => !t.preview_url);
   
-  for (let i = 0; i < spotifyTracks.length; i++) {
-    const track = spotifyTracks[i];
-    let enhancedTrack = { ...track };
-    
-
-    const artistName = track.artists && track.artists.length > 0 ? track.artists[0].name : 'Unknown Artist'; 
-
-    console.log(`\n📀 Track ${i + 1}/${spotifyTracks.length}: "${track.name}" by "${artistName}"`);
-    
-    if (track.preview_url) {
-      console.log('  ✅ Spotify preview available, skipping YouTube search');
-      spotifyPreviewCount++;
-    } else {
-      console.log('  ❌ No Spotify preview, searching YouTube...');
-      
-      const youtubePreview = await getYouTubePreview(track.name, artistName);
-      
-      if (youtubePreview) {
-        enhancedTrack.youtube_preview = youtubePreview;
-        youtubeSuccessCount++;
-        console.log(`  ✅ YouTube preview added for "${track.name}"`);
-      } else {
-        console.log(`  ❌ No suitable YouTube preview found for "${track.name}"`);
-      }
-      
-      // Rate limiting delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    
-    enhancedTracks.push(enhancedTrack);
+  console.log(`📊 Preview status: ${tracksWithSpotify.length} have Spotify, ${tracksNeedingYouTube.length} need YouTube`);
+  
+  // Process tracks in controlled batches for YouTube API rate limiting
+  const enhancedTracks = [];
+  const chunks = [];
+  
+  // Add tracks with Spotify previews (no processing needed)
+  enhancedTracks.push(...tracksWithSpotify);
+  
+  // Split tracks needing YouTube into chunks
+  for (let i = 0; i < tracksNeedingYouTube.length; i += maxConcurrency) {
+    chunks.push(tracksNeedingYouTube.slice(i, i + maxConcurrency));
   }
   
-  console.log(`\n📊 Enhancement complete:`);
-  console.log(`  🎧 Spotify previews: ${spotifyPreviewCount}`);
-  console.log(`  📺 YouTube previews: ${youtubeSuccessCount}`);
-  console.log(`  ❌ No previews: ${spotifyTracks.length - spotifyPreviewCount - youtubeSuccessCount}`);
-  console.log(`  📈 Total coverage: ${((spotifyPreviewCount + youtubeSuccessCount) / spotifyTracks.length * 100).toFixed(1)}%`);
+  let youtubeSuccessCount = 0;
+  let youtubeErrorCount = 0;
+  
+  // Process each chunk in parallel
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    const chunk = chunks[chunkIndex];
+    console.log(`🔍 Processing YouTube chunk ${chunkIndex + 1}/${chunks.length} (${chunk.length} tracks)`);
+    
+    // Execute YouTube searches in parallel for this chunk
+    const chunkPromises = chunk.map(track => searchSingleYouTubePreview(track));
+    const chunkResults = await Promise.allSettled(chunkPromises);
+    
+    // Process results
+    chunkResults.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        const enhancedTrack = result.value;
+        enhancedTracks.push(enhancedTrack);
+        
+        if (enhancedTrack.searchType === 'youtube_found') {
+          youtubeSuccessCount++;
+          console.log(`  ✅ YouTube preview found for "${enhancedTrack.name}"`);
+        } else if (enhancedTrack.searchType === 'youtube_error') {
+          youtubeErrorCount++;
+        }
+      } else {
+        // Promise was rejected
+        const originalTrack = chunk[index];
+        enhancedTracks.push(originalTrack);
+        youtubeErrorCount++;
+        console.error(`❌ Failed to process "${originalTrack.name}":`, result.reason);
+      }
+    });
+    
+    // Small delay between chunks to respect YouTube API rate limits
+    if (chunkIndex < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  const endTime = Date.now();
+  const duration = endTime - startTime;
+  
+  // Calculate final stats
+  const spotifyPreviewCount = enhancedTracks.filter(t => t.preview_url).length;
+  const youtubePreviewCount = enhancedTracks.filter(t => t.youtube_preview).length;
+  const totalWithPreviews = spotifyPreviewCount + youtubePreviewCount;
+  const coveragePercent = ((totalWithPreviews / enhancedTracks.length) * 100).toFixed(1);
+  
+  console.log(`\n✅ Parallel YouTube enhancement completed in ${duration}ms`);
+  console.log(`📊 Final results:`);
+  console.log(`   🎧 Spotify previews: ${spotifyPreviewCount}`);
+  console.log(`   📺 YouTube previews: ${youtubePreviewCount}`);
+  console.log(`   ❌ No previews: ${enhancedTracks.length - totalWithPreviews}`);
+  console.log(`   📈 Total coverage: ${coveragePercent}%`);
+  console.log(`   ⚡ Speed improvement: ~${Math.round((tracksNeedingYouTube.length * 300) / duration)}x faster`);
   
   return enhancedTracks;
 }
@@ -332,7 +406,7 @@ Format your response as a JSON array with this exact structure:
 Be specific with real song titles and artist names. Focus on popular and recognizable songs.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -343,8 +417,8 @@ Be specific with real song titles and artist names. Focus on popular and recogni
           content: prompt
         }
       ],
-      temperature: 0.4,
-      max_tokens: 2000, 
+      temperature: 0.3,
+      max_tokens: 1200, 
     });
 
     const responseText = completion.choices[0].message.content;
@@ -361,43 +435,182 @@ Be specific with real song titles and artist names. Focus on popular and recogni
     throw new Error('Failed to generate song recommendations');
   }
 }
+async function searchSingleTrack(recommendation, accessToken) {
+  try {
+    // Primary search with exact match
+    const query = `track:"${recommendation.song}" artist:"${recommendation.artist}"`;
+    const tracks = await searchSpotifyTracks(query, accessToken, 1);
+    
+    if (tracks.length > 0) {
+      return {
+        ...tracks[0],
+        recommendation: recommendation,
+        searchSuccess: true,
+        searchMethod: 'exact'
+      };
+    }
+    
+    // Fallback search with broader query
+    const fallbackQuery = `${recommendation.song} ${recommendation.artist}`;
+    const fallbackTracks = await searchSpotifyTracks(fallbackQuery, accessToken, 1);
+    
+    if (fallbackTracks.length > 0) {
+      return {
+        ...fallbackTracks[0],
+        recommendation: recommendation,
+        searchSuccess: true,
+        searchMethod: 'fallback'
+      };
+    }
+    
+    // No tracks found
+    return {
+      recommendation: recommendation,
+      searchSuccess: false,
+      error: 'No tracks found'
+    };
+    
+  } catch (error) {
+    console.error(`Error finding track for "${recommendation.song}" by "${recommendation.artist}":`, error.message);
+    return {
+      recommendation: recommendation,
+      searchSuccess: false,
+      error: error.message
+    };
+  }
+}
 
 // Find tracks on Spotify based on AI recommendations
 async function findSpotifyTracks(songRecommendations, accessToken) {
-  const foundTracks = [];
+  console.log(`🔍 Starting parallel Spotify search for ${songRecommendations.length} songs...`);
+  const startTime = Date.now();
   
-  for (const recommendation of songRecommendations) {
-    try {
-      // Search for the specific song and artist
-      const query = `track:"${recommendation.song}" artist:"${recommendation.artist}"`;
-      const tracks = await searchSpotifyTracks(query, accessToken, 1);
+  // Create promise for each track search - NO DELAYS
+  const searchPromises = songRecommendations.map(recommendation => 
+    searchSingleTrack(recommendation, accessToken)
+  );
+  
+  // Execute all searches in parallel with graceful error handling
+  const results = await Promise.allSettled(searchPromises);
+  
+  // Process results and extract successful tracks
+  const foundTracks = [];
+  const stats = {
+    successful: 0,
+    failed: 0,
+    exactMatches: 0,
+    fallbackMatches: 0
+  };
+  
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled' && result.value.searchSuccess) {
+      foundTracks.push(result.value);
+      stats.successful++;
       
-      if (tracks.length > 0) {
-        foundTracks.push({
-          ...tracks[0],
-          recommendation: recommendation
-        });
+      if (result.value.searchMethod === 'exact') {
+        stats.exactMatches++;
       } else {
-        // Fallback: search with broader query
-        const fallbackQuery = `${recommendation.song} ${recommendation.artist}`;
-        const fallbackTracks = await searchSpotifyTracks(fallbackQuery, accessToken, 1);
-        
-        if (fallbackTracks.length > 0) {
-          foundTracks.push({
-            ...fallbackTracks[0],
-            recommendation: recommendation
-          });
-        }
+        stats.fallbackMatches++;
       }
-      
-      // Add small delay to avoid rate limiting
+    } else {
+      stats.failed++;
+      const recommendation = songRecommendations[index];
+      console.warn(`❌ Failed to find: "${recommendation.song}" by "${recommendation.artist}"`);
+    }
+  });
+  
+  const endTime = Date.now();
+  const duration = endTime - startTime;
+  
+  console.log(`✅ Parallel Spotify search completed in ${duration}ms`);
+  console.log(`📊 Results: ${stats.successful}/${songRecommendations.length} found`);
+  console.log(`   • Exact matches: ${stats.exactMatches}`);
+  console.log(`   • Fallback matches: ${stats.fallbackMatches}`);
+  console.log(`   • Failed: ${stats.failed}`);
+  
+  return foundTracks;
+}
+
+// ENHANCED: Rate-limited parallel search (optional - use if hitting rate limits)
+async function findSpotifyTracksWithRateLimit(songRecommendations, accessToken, concurrency = 5) {
+  console.log(`🔍 Starting rate-limited parallel search (concurrency: ${concurrency})...`);
+  const startTime = Date.now();
+  
+  const foundTracks = [];
+  const chunks = [];
+  
+  // Split recommendations into chunks for controlled concurrency
+  for (let i = 0; i < songRecommendations.length; i += concurrency) {
+    chunks.push(songRecommendations.slice(i, i + concurrency));
+  }
+  
+  // Process each chunk in parallel, chunks sequentially
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    const chunk = chunks[chunkIndex];
+    console.log(`Processing chunk ${chunkIndex + 1}/${chunks.length} (${chunk.length} tracks)`);
+    
+    const chunkPromises = chunk.map(recommendation => 
+      searchSingleTrack(recommendation, accessToken)
+    );
+    
+    const chunkResults = await Promise.allSettled(chunkPromises);
+    
+    // Add successful results
+    chunkResults.forEach(result => {
+      if (result.status === 'fulfilled' && result.value.searchSuccess) {
+        foundTracks.push(result.value);
+      }
+    });
+    
+    // Small delay between chunks if needed (only for rate limiting)
+    if (chunkIndex < chunks.length - 1) {
       await new Promise(resolve => setTimeout(resolve, 100));
-    } catch (error) {
-      console.error(`Error finding track for ${recommendation.song}:`, error);
     }
   }
   
+  const endTime = Date.now();
+  console.log(`✅ Rate-limited search completed in ${endTime - startTime}ms`);
+  console.log(`📊 Found ${foundTracks.length}/${songRecommendations.length} tracks`);
+  
   return foundTracks;
+}
+
+// BONUS: Token caching for additional performance
+let cachedSpotifyToken = null;
+let tokenExpiryTime = null;
+
+async function getCachedSpotifyAccessToken() {
+  const now = Date.now();
+  
+  // Return cached token if still valid (with 5-minute buffer)
+  if (cachedSpotifyToken && tokenExpiryTime && now < tokenExpiryTime - 300000) {
+    console.log('✅ Using cached Spotify token');
+    return cachedSpotifyToken;
+  }
+  
+  console.log('🔄 Fetching new Spotify token');
+  try {
+    const response = await axios.post('https://accounts.spotify.com/api/token', 
+      'grant_type=client_credentials',
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')}`
+        }
+      }
+    );
+    
+    cachedSpotifyToken = response.data.access_token;
+    // Spotify tokens expire in 3600 seconds (1 hour)
+    tokenExpiryTime = now + (response.data.expires_in * 1000);
+    
+    console.log('✅ New Spotify token cached');
+    return cachedSpotifyToken;
+    
+  } catch (error) {
+    console.error('Error getting Spotify token:', error);
+    throw new Error('Failed to authenticate with Spotify');
+  }
 }
 
 // Health check endpoint
@@ -458,7 +671,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 
       // Step 3: Get Spotify access token
       console.log('Getting Spotify access token...');
-      const spotifyToken = await getSpotifyAccessToken();
+      const spotifyToken = await getCachedSpotifyAccessToken();
 
       // Step 4: Search for tracks on Spotify
       console.log('Searching for tracks on Spotify...');
@@ -488,9 +701,11 @@ router.post('/', upload.single('file'), async (req, res) => {
 });
 console.log('=== END ARTIST DEBUG ===');
 
+
+
       // Step 5: Enhance with YouTube previews
       console.log('Enhancing tracks with YouTube previews...');
-      const enhancedTracks = await enhanceTracksWithYouTube(spotifyTracks);
+      const enhancedTracks = await enhanceTracksWithYouTube(spotifyTracks, 3);
 
       const spotifyPreviews = enhancedTracks.filter(t => t.preview_url).length;
       const youtubePreviews = enhancedTracks.filter(t => t.youtube_preview).length;

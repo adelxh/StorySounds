@@ -26,15 +26,15 @@ body {
 
 /* Animated background */
 .background-animation {
-  position: fixed;
+    position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   z-index: -2;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
+ background: linear-gradient(135deg, #000000 0%, #0a0a0a 25%, #141414 50%, #0a0a0a 75%, #000000 100%);
   background-size: 400% 400%;
-  animation: gradientShift 15s ease infinite;
+  animation: gradientShift 30s ease infinite;
 }
 
 @keyframes gradientShift {
@@ -115,7 +115,7 @@ body {
 }
 
 /* Mouse follower */
-.mouse-follower {
+/* .mouse-follower {
   position: fixed;
   width: 20px;
   height: 20px;
@@ -125,7 +125,7 @@ body {
   z-index: 1000;
   transform: translate(-50%, -50%);
   transition: transform 0.1s ease-out;
-}
+} */
 
 /* Container */
 .container {
@@ -248,12 +248,12 @@ body {
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1);
+   background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
   background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: gradientText 3s ease-in-out infinite;
+  animation: gradientText 5s ease-in-out infinite;
 }
 
 @keyframes gradientText {
@@ -561,7 +561,7 @@ body {
   width: 12px;
   background: linear-gradient(to top, #667eea, #764ba2);
   border-radius: 6px;
-  animation: waveAnimation 1.5s ease-in-out infinite;
+  animation: waveAnimation 3s ease-in-out infinite;
 }
 
 .wave-bar:nth-child(1) { height: 60px; animation-delay: 0s; }
@@ -1259,3 +1259,206 @@ body {
   }
 }
 
+.spotify-auth-section {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-top: 2rem;
+}
+.auth-prompt {
+  text-align: center;
+}
+.auth-prompt h4 {
+  color: #ffffff;
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.auth-prompt p {
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+}
+.spotify-login-button {
+  background: linear-gradient(135deg, #1ed760, #1db954);
+  border: none;
+  color: white;
+  padding: 0.875rem 2rem;
+  border-radius: 50px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 15px rgba(30, 215, 96, 0.3);
+}
+.spotify-login-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(30, 215, 96, 0.4);
+  background: linear-gradient(135deg, #1fdf63, #1ed760);
+}
+
+.spotify-login-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 15px rgba(30, 215, 96, 0.2);
+}
+.auth-success {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* User Info Row */
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem 1.5rem;
+  border-radius: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.welcome-text {
+  color: #ffffff;
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+/* Disconnect Button */
+.logout-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+/* Playlist Creation Section */
+.playlist-creation {
+  text-align: center;
+}
+.create-playlist-button {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border: none;
+  color: white;
+  padding: 1rem 2.5rem;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+  min-width: 200px;
+  justify-content: center;
+}
+.create-playlist-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4);
+  background: linear-gradient(135deg, #7289f0, #8659b8);
+}
+.create-playlist-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 4px 15px rgba(118, 75, 162, 0.2);
+}
+.creation-success {
+  background: rgba(76, 217, 100, 0.1);
+  border: 1px solid rgba(76, 217, 100, 0.3);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+.creation-success p {
+  color: #4cd964;
+  margin: 0 0 1rem 0;
+  font-weight: 500;
+}
+
+.creation-error {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 15px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+.creation-error p {
+  color: #ff6b6b;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Playlist Link */
+.playlist-link {
+  background: linear-gradient(135deg, #1ed760, #1db954);
+  border: none;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 25px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.3s ease;
+  margin: 0.5rem 0;
+}
+.track-count {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0 0;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .spotify-auth-section {
+    padding: 1.5rem;
+    margin-top: 1rem;
+  }
+  
+  .user-info {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+  
+  .create-playlist-button {
+    padding: 0.875rem 2rem;
+    font-size: 1rem;
+    min-width: unset;
+    width: 100%;
+  }
+  
+  .spotify-login-button {
+    padding: 0.75rem 1.5rem;
+    width: 100%;
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-prompt h4 {
+    font-size: 1.1rem;
+  }
+  
+  .auth-prompt p {
+    font-size: 0.9rem;
+  }
+  
+  .welcome-text {
+    font-size: 0.9rem;
+  }
+}
