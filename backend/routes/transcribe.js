@@ -1,4 +1,4 @@
-// backend/routes/transcribe.js
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -69,7 +69,6 @@ function getFileExtension(file) {
   return 'webm';
 }
 
-// FIXED: YouTube search function with proper error handling
 async function getYouTubePreview(songName, artistName) {
   console.log(`\n🔍 Searching YouTube for: "${songName}" by "${artistName}"`);
   
@@ -85,7 +84,7 @@ async function getYouTubePreview(songName, artistName) {
     : '';
 
   try {
-    // Create search query - skip artist if it's undefined/unknown
+    // Create search query
     const searchQuery = safeArtistName 
       ? `${safeSongName} ${safeArtistName}`
       : safeSongName;
@@ -97,7 +96,7 @@ async function getYouTubePreview(songName, artistName) {
         part: 'snippet',
         q: searchQuery,
         type: 'video',
-        maxResults: 10,
+        maxResults: 15, // Get more results to find better matches
         key: YOUTUBE_API_KEY,
         order: 'relevance'
       },
@@ -116,47 +115,92 @@ async function getYouTubePreview(songName, artistName) {
         const songLower = safeSongName.toLowerCase();
         const artistLower = safeArtistName ? safeArtistName.toLowerCase() : '';
         
-        // Title matching
-        if (title.includes(songLower)) score += 30;
-        if (artistLower && title.includes(artistLower)) score += 20;
+        console.log(`    🎥 Analyzing: "${video.snippet.title}" by ${video.snippet.channelTitle}`);
         
-        // Prefer official content
-        if (title.includes('official')) score += 25;
-        if (title.includes('audio')) score += 20;
-        if (title.includes('video')) score += 15;
-        if (title.includes('music')) score += 10;
+        // CRITICAL: Check for actual content similarity first
+        let hasRelevantContent = false;
         
-        // Channel matching (only if we have an artist)
+        // Check if song name appears in title
+        const songWords = songLower.split(' ').filter(word => word.length > 2);
+        const foundSongWords = songWords.filter(word => title.includes(word));
+        const songTitleMatch = songWords.length > 0 ? foundSongWords.length / songWords.length : 0;
+        
+        // Check if artist name appears in title or channel
+        let artistMatch = 0;
         if (artistLower) {
-          if (channelTitle.includes(artistLower)) score += 25;
-          if (channelTitle.includes('official')) score += 15;
-          if (channelTitle.includes('records')) score += 10;
-          if (channelTitle.includes('music')) score += 10;
+          const artistWords = artistLower.split(' ').filter(word => word.length > 2);
+          const foundInTitle = artistWords.filter(word => title.includes(word));
+          const foundInChannel = artistWords.filter(word => channelTitle.includes(word));
+          
+          const titleArtistMatch = artistWords.length > 0 ? foundInTitle.length / artistWords.length : 0;
+          const channelArtistMatch = artistWords.length > 0 ? foundInChannel.length / artistWords.length : 0;
+          
+          artistMatch = Math.max(titleArtistMatch, channelArtistMatch);
         }
         
-        // Avoid non-music content
-        if (title.includes('cover') && !title.includes('official')) score -= 10;
-        if (title.includes('remix') && !title.includes('official')) score -= 5;
-        if (title.includes('live') && !title.includes('official')) score -= 5;
-        if (title.includes('karaoke')) score -= 20;
-        if (title.includes('instrumental')) score -= 10;
-        if (title.includes('tutorial')) score -= 20;
-        if (title.includes('reaction')) score -= 30;
+        console.log(`      📊 Song title match: ${songTitleMatch.toFixed(2)} (${foundSongWords.length}/${songWords.length} words)`);
+        console.log(`      📊 Artist match: ${artistMatch.toFixed(2)}`);
         
-        return { video, score, title, channelTitle };
+        // REQUIRE minimum similarity to be considered relevant
+        if (songTitleMatch >= 0.4 || artistMatch >= 0.5) {
+          hasRelevantContent = true;
+          score += songTitleMatch * 100; // High weight for song title match
+          score += artistMatch * 80; // High weight for artist match
+          
+          console.log(`      ✅ Content is relevant (song: ${songTitleMatch.toFixed(2)}, artist: ${artistMatch.toFixed(2)})`);
+        } else {
+          console.log(`      ❌ Content NOT relevant (song: ${songTitleMatch.toFixed(2)}, artist: ${artistMatch.toFixed(2)})`);
+          // Don't score irrelevant content, regardless of other factors
+          return { video, score: 0, title, channelTitle, hasRelevantContent: false };
+        }
+        
+        // Only add bonus points if content is already relevant
+        if (hasRelevantContent) {
+          // Prefer official content
+          if (title.includes('official')) score += 30;
+          if (title.includes('music video')) score += 25;
+          if (title.includes('official video')) score += 35;
+          if (title.includes('official music video')) score += 40;
+          
+          // Channel credibility bonus (only if content matches)
+          if (channelTitle.includes('official')) score += 20;
+          if (channelTitle.includes('records')) score += 15;
+          if (channelTitle.includes('music')) score += 10;
+          
+          // Avoid low-quality versions
+          if (title.includes('cover') && !title.includes('official')) score -= 20;
+          if (title.includes('karaoke')) score -= 30;
+          if (title.includes('instrumental')) score -= 25;
+          if (title.includes('remix') && !title.includes('official')) score -= 10;
+        }
+        
+        console.log(`      📈 Final score: ${score}`);
+        
+        return { video, score, title, channelTitle, hasRelevantContent };
       });
       
-      scoredVideos.sort((a, b) => b.score - a.score);
+      // Filter out irrelevant content first
+      const relevantVideos = scoredVideos.filter(item => item.hasRelevantContent);
       
-      console.log(`  📊 Top 3 scored results:`);
-      scoredVideos.slice(0, 3).forEach((item, index) => {
+      console.log(`  📊 Relevant videos found: ${relevantVideos.length}/${scoredVideos.length}`);
+      
+      if (relevantVideos.length === 0) {
+        console.log(`  ❌ No relevant videos found for "${safeSongName}" by "${safeArtistName}"`);
+        return null;
+      }
+      
+      // Sort relevant videos by score
+      relevantVideos.sort((a, b) => b.score - a.score);
+      
+      console.log(`  📊 Top 3 relevant results:`);
+      relevantVideos.slice(0, 3).forEach((item, index) => {
         console.log(`    ${index + 1}. Score: ${item.score} - "${item.title}" by ${item.channelTitle}`);
       });
       
-      // Use best match if score is reasonable (lowered threshold)
-      const bestMatch = scoredVideos.find(item => item.score > 5);
+      // Use best relevant match
+      const bestMatch = relevantVideos[0];
       
-      if (bestMatch) {
+      if (bestMatch && bestMatch.score > 20) { // Minimum score threshold
         const video = bestMatch.video;
         console.log(`  ✅ Selected: "${video.snippet.title}" (Score: ${bestMatch.score})`);
         console.log(`  📺 Channel: ${video.snippet.channelTitle}`);
@@ -171,7 +215,7 @@ async function getYouTubePreview(songName, artistName) {
           score: bestMatch.score
         };
       } else {
-        console.log(`  ❌ No good matches found (all scores below 5)`);
+        console.log(`  ❌ No high-quality matches found (best score: ${bestMatch?.score || 0})`);
         return null;
       }
     } else {
@@ -379,54 +423,68 @@ async function searchSpotifyTracks(query, accessToken, limit = 10) {
 // Generate song recommendations using OpenAI
 async function generateSongRecommendations(transcription) {
   try {
-    const prompt = `Based on this user's request: "${transcription}"
+    console.log(`Input transcription: ${transcription}`)
+    const prompt = `Based on this user's request: "${transcription}, generate a list of 15 specific songs that match their request exactly, and exactly how they would appear in SPOTIFY. The songs have to be on spotify no exceptions."
 
-Generate a list of 15 specific songs that match their request. Include songs from the mentioned genres, countries, languages, or themes.
-Please suggest songs that would be perfect for this. Think about:
-- The exact mood and vibe they're describing
-- their age group and what statistically that age group listens to
-- any cultural/regional preferences mentioned
-- the energy level they might want
-- musical styles that would match their description 
-- pay close attention to the language they're requesting for example (give me russian songs) will mean you should PRIORITIZE the songs in that specific language.  
+Generate a list of 15 specific songs that match their request exactly. 
 
-Please focus on this: 
-- popular enough to be easily found
-- well-known tracks 
+Important rules:
+- If they ask for songs from a specific country (like Russian, French, etc.), ONLY recommend songs from that country/language
+- If they ask for a specific genre, focus on that genre
+- If they ask for a specific mood or theme, match that exactly
+- Use real, popular songs that can be found on Spotify
 
-Format your response as a JSON array with this exact structure:
+Format your response as a JSON array:
 [
   {
     "song": "Song Title",
-    "artist": "Artist Name",
-    "reason": "Brief reason why this song fits"
+    "artist": "Artist Name", 
+    "reason": "Brief reason why this song fits their request"
   }
 ]
 
-Be specific with real song titles and artist names. Focus on popular and recognizable songs.`;
+Focus on giving them exactly what they asked for - no exceptions.`;
+console.log('🤖 Sending prompt to OpenAI...');
+    console.log('📤 Prompt preview:', prompt.substring(0, 200) + '...');
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "You are a music DJ who gives personalized recommendations just like a knowledgeable friend would. You understand nuanced music preferences and can match songs to specific moods, cultures, and vibes perfectly. Always respond with valid JSON."
+          content: "You are a world music expert who has deep knowledge of songs from every culture and language. You never recommend songs that don't authentically belong to the requested culture or language. When users ask for songs from a specific country or in a specific language, you are extremely strict about cultural authenticity and language accuracy. You always verify that each song genuinely belongs to the requested category."
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      temperature: 0.3,
-      max_tokens: 1200, 
+      temperature: 0.1,
+      max_tokens: 1500, 
     });
 
-    const responseText = completion.choices[0].message.content;
+     const responseText = completion.choices[0].message.content;
+    
+    console.log(`\n📥 Raw OpenAI Response [${new Date().toLocaleTimeString()}]:`);
+    console.log('─'.repeat(80));
+    console.log(responseText);
+    console.log('─'.repeat(80));
     
     // Try to extract JSON from the response
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const parsedRecommendations = JSON.parse(jsonMatch[0]);
+       console.log(`\n🎵 Parsed Recommendations [${new Date().toLocaleTimeString()}]:`);
+      parsedRecommendations.forEach((rec, index) => {
+        console.log(`${index + 1}. "${rec.song}" by ${rec.artist}`);
+        console.log(`   Reason: ${rec.reason}`);
+        console.log('');
+      });
+      
+      console.log(`✅ Successfully generated ${parsedRecommendations.length} recommendations`);
+      console.log('=== END SONG GENERATION DEBUG ===\n');
+      
+      return parsedRecommendations;
     } else {
       throw new Error('Failed to parse song recommendations');
     }
@@ -435,43 +493,358 @@ Be specific with real song titles and artist names. Focus on popular and recogni
     throw new Error('Failed to generate song recommendations');
   }
 }
-async function searchSingleTrack(recommendation, accessToken) {
+
+async function validateCulturalRecommendations(transcription, recommendations) {
+  // Extract cultural requirements from transcription
+  const culturalKeywords = {
+    israeli: ['israeli', 'israel', 'hebrew', 'ivrit'],
+    arabic: ['arabic', 'arab', 'middle east'],
+    russian: ['russian', 'russia', 'russian language'],
+    french: ['french', 'france', 'français'],
+    spanish: ['spanish', 'spain', 'español', 'latino'],
+    // Add more as needed
+  };
+
+  const lowerTranscription = transcription.toLowerCase();
+  let detectedCulture = null;
+  
+  // Detect what culture was requested
+  for (const [culture, keywords] of Object.entries(culturalKeywords)) {
+    if (keywords.some(keyword => lowerTranscription.includes(keyword))) {
+      detectedCulture = culture;
+      break;
+    }
+  }
+
+  // If no specific culture detected, return original recommendations
+  if (!detectedCulture) {
+    return recommendations;
+  }
+
+  console.log(`🔍 Detected cultural requirement: ${detectedCulture}`);
+
+  // Validate each recommendation using AI
+  const validationPrompt = `
+  The user requested ${detectedCulture} songs. Please validate if these song recommendations are authentic to ${detectedCulture} culture:
+
+  ${recommendations.map((r, i) => `${i+1}. "${r.song}" by ${r.artist}`).join('\n')}
+
+  For each song, respond with ONLY "VALID" or "INVALID" based on whether it authentically belongs to ${detectedCulture} culture.
+  
+  Format: Just list the numbers and VALID/INVALID, like:
+  1. VALID
+  2. INVALID
+  3. VALID
+  etc.`;
+
   try {
-    // Primary search with exact match
-    const query = `track:"${recommendation.song}" artist:"${recommendation.artist}"`;
-    const tracks = await searchSpotifyTracks(query, accessToken, 1);
+    const validation = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system", 
+          content: `You are a cultural music expert. You know exactly which songs belong to which cultures and languages. Be strict - only mark songs as VALID if they are authentically from the requested culture.`
+        },
+        {
+          role: "user",
+          content: validationPrompt
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 500
+    });
+
+    const validationResponse = validation.choices[0].message.content;
+    const validationLines = validationResponse.split('\n').filter(line => line.trim());
     
-    if (tracks.length > 0) {
-      return {
-        ...tracks[0],
-        recommendation: recommendation,
-        searchSuccess: true,
-        searchMethod: 'exact'
-      };
+    // Filter out invalid recommendations
+    const validRecommendations = recommendations.filter((rec, index) => {
+      const validationLine = validationLines[index];
+      return validationLine && validationLine.includes('VALID');
+    });
+
+    console.log(`✅ Cultural validation: ${validRecommendations.length}/${recommendations.length} songs validated`);
+    
+    // If too many songs were filtered out, generate additional ones
+    if (validRecommendations.length < 10) {
+      console.log(`🔄 Only ${validRecommendations.length} valid songs, generating more...`);
+      const additionalRecommendations = await generateMoreCulturalSongs(detectedCulture, 15 - validRecommendations.length);
+      return [...validRecommendations, ...additionalRecommendations];
+    }
+
+    return validRecommendations;
+    
+  } catch (error) {
+    console.error('Error validating cultural recommendations:', error);
+    return recommendations; // Return original if validation fails
+  }
+}
+
+async function generateMoreCulturalSongs(culture, count) {
+  const culturalPrompts = {
+    israeli: `Generate ${count} authentic Israeli/Hebrew songs. Include classics like "Hava Nagila", "Jerusalem of Gold", and modern Israeli artists like Idan Raichel, Sarit Hadad, Static & Ben El Tavori.`,
+    arabic: `Generate ${count} authentic Arabic songs from various Arab countries. Include classics and modern hits.`,
+    russian: `Generate ${count} authentic Russian songs sung in Russian language.`,
+    // Add more cultures as needed
+  };
+
+  const specificPrompt = culturalPrompts[culture] || `Generate ${count} authentic songs from ${culture} culture.`;
+  
+  const prompt = `${specificPrompt}
+
+Format as JSON array:
+[
+  {
+    "song": "Song Title",
+    "artist": "Artist Name",
+    "reason": "Brief reason (include cultural authenticity)"
+  }
+]
+
+CRITICAL: Every song must be authentically from ${culture} culture. No exceptions.`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are a ${culture} music expert. You only recommend songs that are 100% authentic to ${culture} culture and language.`
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 1000
+    });
+
+    const responseText = completion.choices[0].message.content;
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    } else {
+      return [];
+    }
+  } catch (error) {
+    console.error('Error generating additional cultural songs:', error);
+    return [];
+  }
+}
+function deduplicateTracks(tracks) {
+  const seen = new Map(); // Use Map to store both key and first occurrence
+  const deduplicated = [];
+  
+  console.log(`\n🔄 DEDUPLICATION DEBUG [${new Date().toLocaleTimeString()}]`);
+  console.log(`📊 Input: ${tracks.length} tracks`);
+  
+  for (const track of tracks) {
+    // Create unique key based on track name + first artist (normalized)
+    const normalizedTrackName = track.name.toLowerCase().trim();
+    const normalizedArtistName = track.artists[0].name.toLowerCase().trim();
+    const key = `${normalizedTrackName}___${normalizedArtistName}`;
+    
+    if (!seen.has(key)) {
+      seen.set(key, track);
+      deduplicated.push(track);
+      console.log(`✅ Added: "${track.name}" by ${track.artists[0].name}`);
+    } else {
+      const existing = seen.get(key);
+      console.log(`🔄 DUPLICATE DETECTED:`);
+      console.log(`   Existing: "${existing.name}" by ${existing.artists[0].name}`);
+      console.log(`   Duplicate: "${track.name}" by ${track.artists[0].name}`);
+      console.log(`   Skipping duplicate...`);
+    }
+  }
+  
+  console.log(`📊 Deduplication result: ${tracks.length} → ${deduplicated.length} tracks`);
+  console.log(`🔄 Removed ${tracks.length - deduplicated.length} duplicates\n`);
+  
+  return deduplicated;
+}
+
+// Enhanced song filtering based on user intent
+function filterSongsByIntent(track, originalRecommendation, userTranscription) {
+  const trackName = track.name.toLowerCase();
+  const albumName = (track.album?.name || '').toLowerCase();
+  const userIntent = userTranscription.toLowerCase();
+  
+  console.log(`🎯 INTENT FILTERING: "${track.name}" by ${track.artists[0].name}`);
+  console.log(`   Original request: "${originalRecommendation.song}"`);
+  console.log(`   User context: "${userTranscription}"`);
+  
+  // Define inappropriate content for party/drinking context
+  const partyContext = userIntent.includes('party') || userIntent.includes('drink') || userIntent.includes('club') || userIntent.includes('dance');
+  
+  if (partyContext) {
+    // Filter out inappropriate content for party context
+    const inappropriateKeywords = [
+      'lullaby', 'baby', 'sleep', 'children', 'kids', 'bedtime', 'nursery',
+      'infant', 'toddler', 'peaceful', 'calm', 'meditation', 'relaxing'
+    ];
+    
+    const hasInappropriateContent = inappropriateKeywords.some(keyword => 
+      trackName.includes(keyword) || albumName.includes(keyword)
+    );
+    
+    if (hasInappropriateContent) {
+      console.log(`   ❌ FILTERED OUT: Inappropriate for party context (contains baby/lullaby content)`);
+      return false;
+    }
+  }
+  
+  // Add more intent-based filtering here as needed
+  console.log(`   ✅ PASSED: Appropriate for user context`);
+  return true;
+}
+
+async function findBestMatch(searchResults, recommendation, userTranscription = '') {
+  const searchSong = recommendation.song.toLowerCase();
+  const searchArtist = recommendation.artist.toLowerCase();
+  
+  console.log(`🔍 Looking for best match among ${searchResults.length} results`);
+  console.log(`🎯 Target: "${recommendation.song}" by "${recommendation.artist}"`);
+  
+  // Filter results by intent first
+  const intentFilteredResults = searchResults.filter(track => 
+    filterSongsByIntent(track, recommendation, userTranscription)
+  );
+  
+  console.log(`🎯 After intent filtering: ${intentFilteredResults.length}/${searchResults.length} tracks remain`);
+  
+  if (intentFilteredResults.length === 0) {
+    console.log(`❌ All tracks filtered out by intent filtering`);
+    return null;
+  }
+  
+  // PHASE 1: Look for exact or very close song matches
+  for (const track of intentFilteredResults) {
+    const trackName = track.name.toLowerCase();
+    const artistName = track.artists[0].name.toLowerCase();
+    
+    // Clean names for comparison
+    const cleanSearchArtist = searchArtist.replace(/\s*(ft\.?|feat\.?|featuring|&|and)\s*.*/i, '').trim();
+    const cleanTrackName = trackName.replace(/\s*\([^)]*\)\s*/g, '').trim();
+    const cleanSearchSong = searchSong.replace(/\s*\([^)]*\)\s*/g, '').trim();
+    
+    const artistWords = cleanSearchArtist.split(' ').filter(word => word.length > 1);
+    const songWords = cleanSearchSong.split(' ').filter(word => word.length > 2);
+    
+    const foundArtistWords = artistWords.filter(word => artistName.includes(word));
+    const artistMatchScore = artistWords.length > 0 ? foundArtistWords.length / artistWords.length : 0;
+    
+    const foundSongWords = songWords.filter(word => cleanTrackName.includes(word));
+    const songMatchScore = songWords.length > 0 ? foundSongWords.length / songWords.length : 0;
+    
+    // High-confidence matches
+    const isExcellentMatch = artistMatchScore >= 0.8 && songMatchScore >= 0.5;
+    const isGoodMatch = artistMatchScore >= 0.6 && songMatchScore >= 0.3;
+    
+    if (isExcellentMatch || isGoodMatch) {
+      console.log(`    ✅ ${isExcellentMatch ? 'EXCELLENT' : 'GOOD'} MATCH! "${track.name}" by ${track.artists[0].name}`);
+      return track;
+    }
+  }
+  
+  // PHASE 2: Find most popular appropriate song by the correct artist
+  console.log(`🔄 No exact song matches. Looking for MOST POPULAR appropriate song by "${recommendation.artist}"`);
+  
+  const artistMatches = [];
+  
+  for (const track of intentFilteredResults) {
+    const artistName = track.artists[0].name.toLowerCase();
+    const cleanSearchArtist = searchArtist.replace(/\s*(ft\.?|feat\.?|featuring|&|and)\s*.*/i, '').trim();
+    
+    const artistWords = cleanSearchArtist.split(' ').filter(word => word.length > 1);
+    const foundArtistWords = artistWords.filter(word => artistName.includes(word));
+    const artistMatchScore = artistWords.length > 0 ? foundArtistWords.length / artistWords.length : 0;
+    
+    if (artistMatchScore >= 0.7) {
+      artistMatches.push({
+        track,
+        artistMatchScore,
+        popularity: track.popularity || 0
+      });
+    }
+  }
+  
+  if (artistMatches.length > 0) {
+    // Sort by popularity (highest first), then by artist match score
+    artistMatches.sort((a, b) => {
+      if (b.popularity !== a.popularity) {
+        return b.popularity - a.popularity;
+      }
+      return b.artistMatchScore - a.artistMatchScore;
+    });
+    
+    const mostPopular = artistMatches[0];
+    console.log(`    🏆 MOST POPULAR APPROPRIATE: "${mostPopular.track.name}" by "${mostPopular.track.artists[0].name}"`);
+    console.log(`       📈 Popularity: ${mostPopular.popularity}, Artist match: ${mostPopular.artistMatchScore.toFixed(2)}`);
+    console.log(`    📝 Note: Using most popular appropriate song by this artist`);
+    
+    return mostPopular.track;
+  }
+  
+  console.log(`  ❌ No suitable artist matches found`);
+  return null;
+}
+
+
+async function searchSingleTrack(recommendation, accessToken, userTranscription = '') {
+  console.log(`\n🔍 SPOTIFY SEARCH DEBUG [${new Date().toLocaleTimeString()}]`);
+  console.log(`🎵 Searching for: "${recommendation.song}" by "${recommendation.artist}"`);
+  console.log(`🎯 User context: "${userTranscription}"`);
+  
+  try {
+    // STRATEGY 1: Combined artist + song search
+    const combinedQuery = `${recommendation.artist} ${recommendation.song}`;
+    console.log(`📤 Combined search: "${combinedQuery}"`);
+    
+    const combinedResults = await searchSpotifyTracks(combinedQuery, accessToken, 10);
+    console.log(`📥 Combined search returned ${combinedResults.length} results`);
+    
+    if (combinedResults.length > 0) {
+      const combinedMatch = await findBestMatch(combinedResults, recommendation, userTranscription);
+      if (combinedMatch) {
+        console.log(`✅ FOUND with combined search: "${combinedMatch.name}" by ${combinedMatch.artists[0].name}`);
+        return {
+          ...combinedMatch,
+          recommendation: recommendation,
+          searchSuccess: true,
+          searchMethod: 'combined'
+        };
+      }
     }
     
-    // Fallback search with broader query
-    const fallbackQuery = `${recommendation.song} ${recommendation.artist}`;
-    const fallbackTracks = await searchSpotifyTracks(fallbackQuery, accessToken, 1);
+    // STRATEGY 2: Artist-first search
+    console.log(`📤 Artist-first search: "${recommendation.artist}"`);
+    const artistResults = await searchSpotifyTracks(recommendation.artist, accessToken, 50);
+    console.log(`📥 Artist search returned ${artistResults.length} results`);
     
-    if (fallbackTracks.length > 0) {
-      return {
-        ...fallbackTracks[0],
-        recommendation: recommendation,
-        searchSuccess: true,
-        searchMethod: 'fallback'
-      };
+    if (artistResults.length > 0) {
+      const artistMatch = await findBestMatch(artistResults, recommendation, userTranscription);
+      if (artistMatch) {
+        console.log(`✅ FOUND with artist search: "${artistMatch.name}" by ${artistMatch.artists[0].name}`);
+        return {
+          ...artistMatch,
+          recommendation: recommendation,
+          searchSuccess: true,
+          searchMethod: 'artist-first'
+        };
+      }
     }
     
-    // No tracks found
+    console.log(`❌ NO APPROPRIATE MATCHES FOUND for "${recommendation.song}" by "${recommendation.artist}"`);
     return {
       recommendation: recommendation,
       searchSuccess: false,
-      error: 'No tracks found'
+      error: 'No appropriate matches found'
     };
     
   } catch (error) {
-    console.error(`Error finding track for "${recommendation.song}" by "${recommendation.artist}":`, error.message);
+    console.error(`❌ Error finding track for "${recommendation.song}" by "${recommendation.artist}":`, error.message);
     return {
       recommendation: recommendation,
       searchSuccess: false,
@@ -481,13 +854,14 @@ async function searchSingleTrack(recommendation, accessToken) {
 }
 
 // Find tracks on Spotify based on AI recommendations
-async function findSpotifyTracks(songRecommendations, accessToken) {
+async function findSpotifyTracks(songRecommendations, accessToken, userTranscription = '') {
   console.log(`🔍 Starting parallel Spotify search for ${songRecommendations.length} songs...`);
+  console.log(`🎯 User context: "${userTranscription}"`);
   const startTime = Date.now();
   
-  // Create promise for each track search - NO DELAYS
+  // Create promise for each track search - pass userTranscription
   const searchPromises = songRecommendations.map(recommendation => 
-    searchSingleTrack(recommendation, accessToken)
+    searchSingleTrack(recommendation, accessToken, userTranscription)
   );
   
   // Execute all searches in parallel with graceful error handling
@@ -523,12 +897,18 @@ async function findSpotifyTracks(songRecommendations, accessToken) {
   const duration = endTime - startTime;
   
   console.log(`✅ Parallel Spotify search completed in ${duration}ms`);
-  console.log(`📊 Results: ${stats.successful}/${songRecommendations.length} found`);
+  console.log(`📊 Raw results: ${stats.successful}/${songRecommendations.length} found`);
+  
+  // CRITICAL: Apply deduplication here
+  const deduplicatedTracks = deduplicateTracks(foundTracks);
+  
+  console.log(`📊 Final results after deduplication: ${deduplicatedTracks.length} unique tracks`);
   console.log(`   • Exact matches: ${stats.exactMatches}`);
   console.log(`   • Fallback matches: ${stats.fallbackMatches}`);
   console.log(`   • Failed: ${stats.failed}`);
+  console.log(`   • Duplicates removed: ${foundTracks.length - deduplicatedTracks.length}`);
   
-  return foundTracks;
+  return deduplicatedTracks;
 }
 
 // ENHANCED: Rate-limited parallel search (optional - use if hitting rate limits)
@@ -661,21 +1041,25 @@ router.post('/', upload.single('file'), async (req, res) => {
       transcriptionText = transcription.text;
       console.log('Transcription successful:', transcriptionText);
 
-      // Delete audio file after transcription
+  
       fs.unlinkSync(audioPath);
 
-      // Step 2: Generate song recommendations using AI
-      console.log('Generating song recommendations...');
-      const songRecommendations = await generateSongRecommendations(transcriptionText);
-      console.log(`Generated ${songRecommendations.length} song recommendations`);
 
-      // Step 3: Get Spotify access token
+      console.log('Generating song recommendations...');
+      const initialRecommendations = await generateSongRecommendations(transcriptionText);
+      console.log(`Generated ${initialRecommendations.length} song recommendations`);
+
+      console.log('Validating cultural authenticity...');
+    const validatedRecommendations = await validateCulturalRecommendations(transcriptionText, initialRecommendations);
+    console.log(`Validated ${validatedRecommendations.length} culturally authentic recommendations`);
+
+  
       console.log('Getting Spotify access token...');
       const spotifyToken = await getCachedSpotifyAccessToken();
 
-      // Step 4: Search for tracks on Spotify
+ 
       console.log('Searching for tracks on Spotify...');
-      const spotifyTracks = await findSpotifyTracks(songRecommendations, spotifyToken);
+      const spotifyTracks = await findSpotifyTracks(validatedRecommendations, spotifyToken, transcriptionText);
       console.log(`Found ${spotifyTracks.length} tracks on Spotify`);
 
       // FIXED: Add Spotify debug in the correct place
@@ -714,7 +1098,7 @@ console.log('=== END ARTIST DEBUG ===');
       // FIXED: Prepare response with enhanced tracks
       const response = {
         transcription: transcriptionText,
-        aiRecommendations: songRecommendations,
+        aiRecommendations: validatedRecommendations,
         spotifyTracks: enhancedTracks.map(track => ({
           id: track.id,
           name: track.name,
@@ -727,11 +1111,12 @@ console.log('=== END ARTIST DEBUG ===');
           recommendation: track.recommendation
         })),
         playlistSummary: {
-          totalRecommended: songRecommendations.length,
+          totalRecommended: validatedRecommendations.length,
           foundOnSpotify: enhancedTracks.length,
           spotifyPreviews: spotifyPreviews,
           youtubePreviews: youtubePreviews,
           totalPreviews: spotifyPreviews + youtubePreviews,
+          culturalValidation: true, 
           success: true
         }
       };
