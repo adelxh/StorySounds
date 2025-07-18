@@ -13,6 +13,8 @@ app.use(express.json());
 app.use('/api/transcribe', transcribeRoute);
 app.use('/api/spotify', require('./routes/spotify-auth'));
 
+app.use('/api/feedback', require('./routes/feedback'));
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 

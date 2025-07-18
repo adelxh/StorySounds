@@ -35,13 +35,13 @@ router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
   
   if (!state || !authSessions.has(state)) {
-    return res.redirect('http://localhost:3000?error=invalid_state');
+    return res.redirect('http://adel-testing.netlify.app?error=invalid_state');
   }
   
   authSessions.delete(state);
   
   if (!code) {
-    return res.redirect('http://localhost:3000?error=no_code');
+    return res.redirect('http://adel-testing.netlify.app?error=no_code');
   }
   
   try {
@@ -79,11 +79,11 @@ router.get('/callback', async (req, res) => {
     console.log(`✅ Stored auth for user: ${userId}`);
     
     // Redirect to frontend with success
-    res.redirect(`http://localhost:3000?spotify_auth=success&user_id=${userId}&user_name=${encodeURIComponent(userResponse.data.display_name || userResponse.data.id)}`);
+    res.redirect(`http://adel-testing.netlify.app?spotify_auth=success&user_id=${userId}&user_name=${encodeURIComponent(userResponse.data.display_name || userResponse.data.id)}`);
     
   } catch (error) {
     console.error('Error exchanging code for token:', error);
-    res.redirect('http://localhost:3000?error=auth_failed');
+    res.redirect('http://adel-testing.netlify.app?error=auth_failed');
   }
 });
 

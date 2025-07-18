@@ -15,6 +15,152 @@ const fetchWithNgrokHeaders = async (url, options = {}) => {
   return fetch(url, defaultOptions);
 };
 
+const FeedbackModal = ({isOpen, onClose}) => {
+  const [feedback, setFeedback] = useState('');
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null);
+
+  const handleSubmit = async () => {
+    if (!feedback.trim()) {
+      setSubmitStatus('error');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+
+    try {
+      // Send feedback to backend
+      const response = await fetch(`${API_BASE_URL}/api/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          feedback: feedback.trim(),
+          email: email.trim() || null,
+          timestamp: new Date().toLocaleString(),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send feedback');
+      }
+
+      console.log('✅ Feedback sent successfully:', result);
+      setSubmitStatus('success');
+      setFeedback('');
+      setEmail('');
+      
+      // Auto-close modal after success
+      setTimeout(() => {
+        onClose();
+        setSubmitStatus(null);
+      }, 2000);
+      
+    } catch (error) {
+      console.error('❌ Failed to send feedback:', error);
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+    const handleOverlayClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      handleSubmit();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="feedback-modal-overlay" onClick={handleOverlayClick}>
+      <div className="feedback-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h4>Send Feedback</h4>
+          <button className="close-button" onClick={onClose}>×</button>
+        </div>
+        
+        <div className="modal-content">
+          {submitStatus === 'success' ? (
+            <div className="feedback-success">
+              <div className="success-icon">✅</div>
+              <h3>Thank you!</h3>
+              <p>Your feedback has been sent successfully.</p>
+            </div>
+          ) : (
+            <div className="feedback-form">
+              <div className="form-group">
+                <label htmlFor="email">Email (optional)</label>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your.email@example.com"
+                  className="feedback-input"
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="feedback">Your Feedback *</label>
+                <textarea
+                  id="feedback"
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder="Tell us what you think, report a bug, or suggest an improvement..."
+                  className="feedback-textarea"
+                  rows="6"
+                  required
+                />
+                <div className="textarea-hint">
+                  Press Ctrl+Enter (Cmd+Enter on Mac) to send quickly
+                </div>
+              </div>
+              
+              {submitStatus === 'error' && (
+                <div className="feedback-error">
+                  <p>❌ Failed to send feedback. Please try again.</p>
+                </div>
+              )}
+              
+              <div className="form-actions">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="cancel-button"
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="submit-button"
+                  disabled={isSubmitting || !feedback.trim()}
+                >
+                  {isSubmitting ? 'Sending...' : 'Send Feedback'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 const App = () => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -25,6 +171,7 @@ const App = () => {
   const [audioUrl, setAudioUrl] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   
   // Hybrid preview state
   const [youtubeModal, setYoutubeModal] = useState(null);
@@ -824,10 +971,10 @@ const SpotifyAuthSection = () => (
       <div className={`container ${isLoaded ? 'loaded' : ''}`}>
         <header className="header">
           <div className="logo">
-            <span className="logo-text">SoundStory</span>
+            <span className="logo-text">StorySounds</span>
             <div className="logo-pulse"></div>
           </div>
-          <button 
+          {/* <button 
             className="test-connection-btn"
             onClick={handleTestConnection}
             style={{
@@ -842,7 +989,7 @@ const SpotifyAuthSection = () => (
             }}
           >
             Test Backend
-          </button>
+          </button> */}
         </header>
 
         <main className="main">
@@ -1111,14 +1258,26 @@ const SpotifyAuthSection = () => (
             </div>
           </div>
         </main>
+         <button 
+        className="feedback-trigger-button"
+        onClick={() => setIsFeedbackModalOpen(true)}
+      >
+        💬 Feedback
+      </button>
+      
+      {/* Feedback Modal */}
+      <FeedbackModal 
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+      />
        
 
         <footer className="footer">
           <div className="footer-content">
-            <p>&copy; 2025 SoundStory. Experience music like never before.</p>
-            <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem' }}>
+            <p>&copy; 2025 StorySounds. Experience music like never before.</p>
+            {/* <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem' }}>
               Backend: {API_BASE_URL}
-            </p>
+            </p> */}
           </div>
         </footer>
       </div>
