@@ -146,11 +146,17 @@ body {
 
 /* Header */
 .header {
-  padding: 2rem 2rem 1rem;
-  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 1rem 2rem;
+  position: relative;
+  z-index: 100;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .logo {
@@ -537,8 +543,8 @@ body {
 }
 
 .feature:hover {
-  transform: translateY(-5px);
-  background: rgba(255, 255, 255, 0.15);
+  /* transform: translateY(-5px); */
+  /* background: rgba(255, 255, 255, 0.15); */
 }
 
 .feature-icon {
@@ -604,6 +610,32 @@ body {
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
+.auth-success-banner {
+  background: linear-gradient(135deg, rgba(30, 215, 96, 0.1), rgba(30, 215, 96, 0.05));
+  border: 1px solid rgba(30, 215, 96, 0.2);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin: 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.auth-success-banner .success-icon {
+  font-size: 1.5rem;
+}
+
+.auth-success-banner .success-content h4 {
+  margin: 0 0 0.25rem 0;
+  color: #1ed760;
+  font-size: 1rem;
+}
+
+.auth-success-banner .success-content p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+}
 
 .footer-content p {
   opacity: 0.8;
@@ -638,6 +670,20 @@ body {
     flex-direction: column;
     gap: 1rem;
     text-align: center;
+    padding: 1rem;
+  }
+    .header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .user-greeting {
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+  }
+  
+  .user-greeting p {
+    font-size: 0.9rem;
   }
   
   .transcription-actions {
@@ -652,6 +698,14 @@ body {
   
   .header {
     padding: 1rem;
+  }
+  .plan-indicator {
+    margin-top: 0.75rem;
+  }
+  
+  .plan-badge {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
   }
   
   .playback-controls, .transcription-section {
@@ -1325,12 +1379,83 @@ body {
   border-radius: 15px;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+.user-greeting {
+  background: rgba(30, 215, 96, 0.1);
+  border: 1px solid rgba(30, 215, 96, 0.2);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+.user-greeting p {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.user-greeting strong {
+  color: #1ed760;
+  font-weight: 600;
+}
+.plan-indicator {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.plan-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.plan-badge.free {
+  background: rgba(128, 128, 128, 0.2);
+  color: #ccc;
+}
+.plan-badge.premium {
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+}
 .welcome-text {
   color: #ffffff;
   font-weight: 500;
   font-size: 1rem;
 }
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+  color: white;
+}
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top: 3px solid #1ed760;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
 
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.feature:has(.feature-icon) {
+  transition: all 0.3s ease;
+}
+
+.feature:last-child {
+  background: rgba(30, 215, 96, 0.1);
+  border: 1px solid rgba(30, 215, 96, 0.2);
+  border-radius: 8px;
+}
 /* Disconnect Button */
 .logout-button {
   background: rgba(255, 255, 255, 0.1);

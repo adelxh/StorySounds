@@ -1,8 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
+// Authentication imports
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import AuthModal from './components/AuthModal';
+import UserMenu from './components/UserMenu';
+import AuthButton from './components/AuthButton';
+
 // API Base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://8bb268dcc0d5.ngrok-free.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://9c20d55f4d12.ngrok-free.app';
 const fetchWithNgrokHeaders = async (url, options = {}) => {
   const defaultOptions = {
     headers: {
@@ -31,7 +37,6 @@ const FeedbackModal = ({isOpen, onClose}) => {
     setSubmitStatus(null);
 
     try {
-      // Send feedback to backend
       const response = await fetch(`${API_BASE_URL}/api/feedback`, {
         method: 'POST',
         headers: {
@@ -55,7 +60,6 @@ const FeedbackModal = ({isOpen, onClose}) => {
       setFeedback('');
       setEmail('');
       
-      // Auto-close modal after success
       setTimeout(() => {
         onClose();
         setSubmitStatus(null);
@@ -69,7 +73,7 @@ const FeedbackModal = ({isOpen, onClose}) => {
     }
   };
 
-    const handleOverlayClick = (e) => {
+  const handleOverlayClick = (e) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
@@ -161,8 +165,14 @@ const FeedbackModal = ({isOpen, onClose}) => {
   );
 }
 
+// Main App Content Component
+const AppContent = () => {
+  // Authentication state
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState('signin');
 
-const App = () => {
+  // All your existing state
   const [isLoaded, setIsLoaded] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isRecording, setIsRecording] = useState(false);
@@ -190,113 +200,119 @@ const App = () => {
   const audioRef = useRef(null);
   const streamRef = useRef(null);
   const timerRef = useRef(null);
+
   const [spotifyAuth, setSpotifyAuth] = useState({
-  isAuthenticated: false,
-  user: null,
-  isLoading: false
-});
-const [playlistCreation, setPlaylistCreation] = useState({
-  isCreating: false,
-  error: null,
-  success: null
-});
+    isAuthenticated: false,
+    user: null,
+    isLoading: false
+  });
+  const [playlistCreation, setPlaylistCreation] = useState({
+    isCreating: false,
+    error: null,
+    success: null
+  });
 
-useEffect(() => {
-  checkSpotifyAuthStatus();
-}, []);
+  // Authentication handlers
+  const handleSignIn = () => {
+    setAuthModalMode('signin');
+    setIsAuthModalOpen(true);
+  };
 
-useEffect(() => {
-  // Check for Spotify auth callback in URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const spotifyAuth = urlParams.get('spotify_auth');
-  const userId = urlParams.get('user_id');
-  const userName = urlParams.get('user_name');
-  const error = urlParams.get('error');
-  
-  console.log('🔍 Checking URL params:', { spotifyAuth, userId, userName, error });
-  
-  if (spotifyAuth === 'success' && userId) {
-    console.log('✅ Spotify auth callback detected:', { userId, userName });
+  const handleSignUp = () => {
+    setAuthModalMode('signup');
+    setIsAuthModalOpen(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+  };
+
+  // All your existing useEffect hooks
+  useEffect(() => {
+    checkSpotifyAuthStatus();
+  }, []);
+
+  useEffect(() => {
+    // Check for Spotify auth callback in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const spotifyAuth = urlParams.get('spotify_auth');
+    const userId = urlParams.get('user_id');
+    const userName = urlParams.get('user_name');
+    const error = urlParams.get('error');
     
-    // Store user ID
-    localStorage.setItem('spotify_user_id', userId);
+    console.log('🔍 Checking URL params:', { spotifyAuth, userId, userName, error });
     
-    // Update auth state
-    setSpotifyAuth({
-      isAuthenticated: true,
-      user: { id: userId, display_name: decodeURIComponent(userName || userId) },
-      isLoading: false
-    });
-    
-    // RESTORE PREVIOUS STATE
-    const savedState = localStorage.getItem('app_state_before_auth');
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState);
-        console.log('🔄 Restoring app state:', state);
-        
-        // Only restore if it's recent (within last 10 minutes)
-        const isRecent = Date.now() - state.timestamp < 10 * 60 * 1000;
-        
-        if (isRecent) {
-          // Restore all the state
-          setTranscription(state.transcription || '');
-          setSpotifyTracks(state.spotifyTracks || []);
-          setAiRecommendations(state.aiRecommendations || []);
-          setPlaylistSummary(state.playlistSummary || null);
+    if (spotifyAuth === 'success' && userId) {
+      console.log('✅ Spotify auth callback detected:', { userId, userName });
+      
+      localStorage.setItem('spotify_user_id', userId);
+      
+      setSpotifyAuth({
+        isAuthenticated: true,
+        user: { id: userId, display_name: decodeURIComponent(userName || userId) },
+        isLoading: false
+      });
+      
+      const savedState = localStorage.getItem('app_state_before_auth');
+      if (savedState) {
+        try {
+          const state = JSON.parse(savedState);
+          console.log('🔄 Restoring app state:', state);
           
-          // Set audio URL if it existed (but we can't restore the blob)
-          if (state.audioUrl) {
-            setAudioUrl(state.audioUrl);
+          const isRecent = Date.now() - state.timestamp < 10 * 60 * 1000;
+          
+          if (isRecent) {
+            setTranscription(state.transcription || '');
+            setSpotifyTracks(state.spotifyTracks || []);
+            setAiRecommendations(state.aiRecommendations || []);
+            setPlaylistSummary(state.playlistSummary || null);
+            
+            if (state.audioUrl) {
+              setAudioUrl(state.audioUrl);
+            }
+            
+            console.log('✅ App state restored successfully!');
+          } else {
+            console.log('🗑️ Saved state is too old, skipping restore');
           }
           
-          console.log('✅ App state restored successfully!');
-        } else {
-          console.log('🗑️ Saved state is too old, skipping restore');
+          localStorage.removeItem('app_state_before_auth');
+          
+        } catch (error) {
+          console.error('❌ Error restoring state:', error);
+          localStorage.removeItem('app_state_before_auth');
         }
-        
-        // Clean up saved state
-        localStorage.removeItem('app_state_before_auth');
-        
-      } catch (error) {
-        console.error('❌ Error restoring state:', error);
-        localStorage.removeItem('app_state_before_auth');
+      } else {
+        console.log('ℹ️ No saved state to restore');
       }
-    } else {
-      console.log('ℹ️ No saved state to restore');
+      
+      window.history.replaceState({}, document.title, window.location.pathname);
+      console.log('🎉 Spotify authentication complete!');
+      
+    } else if (error) {
+      console.error('❌ Spotify auth error:', error);
+      setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
+      window.history.replaceState({}, document.title, window.location.pathname);
+      localStorage.removeItem('app_state_before_auth');
     }
-    
-    // Clean up URL
-    window.history.replaceState({}, document.title, window.location.pathname);
-    
-    console.log('🎉 Spotify authentication complete!');
-    
-  } else if (error) {
-    console.error('❌ Spotify auth error:', error);
-    setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
-    
-    // Clean up URL and any saved state
-    window.history.replaceState({}, document.title, window.location.pathname);
-    localStorage.removeItem('app_state_before_auth');
-  }
-}, []);
-useEffect(() => {
-  console.log('📊 Current App State:', {
-    transcription: transcription?.substring(0, 50) + '...',
-    spotifyTracksCount: spotifyTracks?.length || 0,
-    aiRecommendationsCount: aiRecommendations?.length || 0,
-    playlistSummary: playlistSummary,
-    spotifyAuth: spotifyAuth,
-    hasAudioUrl: !!audioUrl
-  });
-}, [transcription, spotifyTracks, aiRecommendations, playlistSummary, spotifyAuth, audioUrl]);
+  }, []);
+
+  useEffect(() => {
+    console.log('📊 Current App State:', {
+      transcription: transcription?.substring(0, 50) + '...',
+      spotifyTracksCount: spotifyTracks?.length || 0,
+      aiRecommendationsCount: aiRecommendations?.length || 0,
+      playlistSummary: playlistSummary,
+      spotifyAuth: spotifyAuth,
+      hasAudioUrl: !!audioUrl
+    });
+  }, [transcription, spotifyTracks, aiRecommendations, playlistSummary, spotifyAuth, audioUrl]);
 
   useEffect(() => {
     setIsLoaded(true);
     
     const handleMouseMove = (e) => {
       if (!youtubeModal) {
-
         setMousePosition({ x: e.clientX, y: e.clientY });
       }
     };
@@ -315,7 +331,8 @@ useEffect(() => {
       }
     };
   }, [youtubeModal]);
-  
+
+  // All your existing functions (keeping them exactly as they are)
   const startTimer = () => {
     setRecordingTime(0);
     timerRef.current = setInterval(() => {
@@ -330,14 +347,11 @@ useEffect(() => {
     }
   };
 
-  // Enhanced hybrid preview handler
   const handlePreviewClick = (track) => {
-    // Priority 1: Use Spotify preview if available
     if (track.preview_url) {
       handleSpotifyPreview(track);
       return;
     }
-    
     
     if (track.youtube_preview) {
       handleYouTubePreview(track);
@@ -347,29 +361,23 @@ useEffect(() => {
     alert('No preview available for this track');
   };
 
-
   const handleSpotifyPreview = (track) => {
-
     if (currentPreview && currentPreview.src === track.preview_url && isPreviewPlaying) {
       currentPreview.pause();
       setIsPreviewPlaying(false);
       return;
     }
 
-    // Stop any currently playing preview
     if (currentPreview) {
       currentPreview.pause();
       currentPreview.currentTime = 0;
     }
 
-    // Close YouTube modal if open
     setYoutubeModal(null);
 
-    // Create and play new audio
     const audio = new Audio(track.preview_url);
     audio.volume = 0.7;
     
-    // Auto-stop after 30 seconds
     setTimeout(() => {
       if (!audio.paused) {
         audio.pause();
@@ -398,30 +406,40 @@ useEffect(() => {
       alert('Error playing preview');
     });
   };
- const checkSpotifyAuthStatus = async () => {
-  const savedUserId = localStorage.getItem('spotify_user_id');
-  console.log('🔍 Checking auth status for user:', savedUserId);
-  
-  if (!savedUserId) {
-    console.log('❌ No saved user ID found');
-    return;
-  }
-  
-  try {
-    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/status/${savedUserId}`);
-    const data = await response.json();
+
+  const checkSpotifyAuthStatus = async () => {
+    const savedUserId = localStorage.getItem('spotify_user_id');
+    console.log('🔍 Checking auth status for user:', savedUserId);
     
-    console.log('📊 Auth status response:', data);
+    if (!savedUserId) {
+      console.log('❌ No saved user ID found');
+      return;
+    }
     
-    if (data.authenticated) {
-      console.log('✅ User is authenticated');
-      setSpotifyAuth({
-        isAuthenticated: true,
-        user: data.user,
-        isLoading: false
-      });
-    } else {
-      console.log('❌ User not authenticated on server');
+    try {
+      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/status/${savedUserId}`);
+      const data = await response.json();
+      
+      console.log('📊 Auth status response:', data);
+      
+      if (data.authenticated) {
+        console.log('✅ User is authenticated');
+        setSpotifyAuth({
+          isAuthenticated: true,
+          user: data.user,
+          isLoading: false
+        });
+      } else {
+        console.log('❌ User not authenticated on server');
+        localStorage.removeItem('spotify_user_id');
+        setSpotifyAuth({
+          isAuthenticated: false,
+          user: null,
+          isLoading: false
+        });
+      }
+    } catch (error) {
+      console.error('❌ Error checking Spotify auth:', error);
       localStorage.removeItem('spotify_user_id');
       setSpotifyAuth({
         isAuthenticated: false,
@@ -429,247 +447,221 @@ useEffect(() => {
         isLoading: false
       });
     }
-  } catch (error) {
-    console.error('❌ Error checking Spotify auth:', error);
+  };
+
+  const handleSpotifyLogin = async () => {
+    setSpotifyAuth(prev => ({ ...prev, isLoading: true }));
+    
+    try {
+      const stateToSave = {
+        transcription,
+        spotifyTracks,
+        aiRecommendations,
+        playlistSummary,
+        audioUrl,
+        audioBlob: audioBlob ? 'has_audio' : null,
+        timestamp: Date.now()
+      };
+      
+      localStorage.setItem('app_state_before_auth', JSON.stringify(stateToSave));
+      console.log('💾 Saved app state before auth:', stateToSave);
+      
+      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/login`);
+      const data = await response.json();
+      
+      if (data.authUrl) {
+        console.log('🚀 Redirecting to Spotify auth...');
+        window.location.href = data.authUrl;
+      } else {
+        throw new Error('No auth URL received');
+      }
+    } catch (error) {
+      console.error('❌ Error initiating Spotify login:', error);
+      setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const handleSpotifyLogout = async () => {
+    const userId = localStorage.getItem('spotify_user_id');
+    if (userId) {
+      try {
+        await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/logout/${userId}`, {
+          method: 'POST'
+        });
+      } catch (error) {
+        console.error('Error logging out:', error);
+      }
+    }
+    
     localStorage.removeItem('spotify_user_id');
     setSpotifyAuth({
       isAuthenticated: false,
       user: null,
       isLoading: false
     });
-  }
-};
+  };
 
-// Replace your handleSpotifyLogin function with this:
-
-const handleSpotifyLogin = async () => {
-  setSpotifyAuth(prev => ({ ...prev, isLoading: true }));
-  
-  try {
-    // SAVE CURRENT STATE BEFORE REDIRECT
-    const stateToSave = {
-      transcription,
-      spotifyTracks,
-      aiRecommendations,
-      playlistSummary,
-      audioUrl,
-      audioBlob: audioBlob ? 'has_audio' : null, // Can't save blob, just flag
-      timestamp: Date.now()
-    };
+  const createSpotifyPlaylist = async () => {
+    if (!spotifyAuth.isAuthenticated || !spotifyTracks.length) return;
     
-    localStorage.setItem('app_state_before_auth', JSON.stringify(stateToSave));
-    console.log('💾 Saved app state before auth:', stateToSave);
+    setPlaylistCreation({ isCreating: true, error: null, success: null });
     
-    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/login`);
-    const data = await response.json();
-    
-    if (data.authUrl) {
-      console.log('🚀 Redirecting to Spotify auth...');
-      window.location.href = data.authUrl;
-    } else {
-      throw new Error('No auth URL received');
-    }
-  } catch (error) {
-    console.error('❌ Error initiating Spotify login:', error);
-    setSpotifyAuth(prev => ({ ...prev, isLoading: false }));
-  }
-};
-
-
-
-// Handle Spotify logout
-const handleSpotifyLogout = async () => {
-  const userId = localStorage.getItem('spotify_user_id');
-  if (userId) {
     try {
-      await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/logout/${userId}`, {
-        method: 'POST'
+      const playlistName = generatePlaylistName(transcription);
+      
+      const formattedTracks = spotifyTracks.map(track => ({
+        id: `spotify:track:${track.id}`
+      }));
+      
+      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/create-playlist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: spotifyAuth.user.id,
+          playlistName: playlistName,
+          description: `Created from audio: "${transcription.substring(0, 100)}..."`,
+          tracks: formattedTracks
+        })
       });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setPlaylistCreation({
+          isCreating: false,
+          error: null,
+          success: data.playlist
+        });
+      } else {
+        throw new Error(data.error || 'Failed to create playlist');
+      }
     } catch (error) {
-      console.error('Error logging out:', error);
-    }
-  }
-  
-  localStorage.removeItem('spotify_user_id');
-  setSpotifyAuth({
-    isAuthenticated: false,
-    user: null,
-    isLoading: false
-  });
-};
-
-// Create Spotify playlist
-const createSpotifyPlaylist = async () => {
-  if (!spotifyAuth.isAuthenticated || !spotifyTracks.length) return;
-  
-  setPlaylistCreation({ isCreating: true, error: null, success: null });
-  
-  try {
-    // Generate playlist name based on transcription
-    const playlistName = generatePlaylistName(transcription);
-    
-    // Format tracks for Spotify API (need to convert to spotify:track:id format)
-    const formattedTracks = spotifyTracks.map(track => ({
-      id: `spotify:track:${track.id}`
-    }));
-    
-    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/create-playlist`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        userId: spotifyAuth.user.id,
-        playlistName: playlistName,
-        description: `Created from audio: "${transcription.substring(0, 100)}..."`,
-        tracks: formattedTracks
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok && data.success) {
+      console.error('Error creating playlist:', error);
       setPlaylistCreation({
         isCreating: false,
-        error: null,
-        success: data.playlist
+        error: error.message,
+        success: null
       });
-    } else {
-      throw new Error(data.error || 'Failed to create playlist');
     }
-  } catch (error) {
-    console.error('Error creating playlist:', error);
-    setPlaylistCreation({
-      isCreating: false,
-      error: error.message,
-      success: null
-    });
-  }
-};
+  };
 
-// Generate playlist name from transcription
-const generatePlaylistName = (transcription) => {
-  const text = transcription.toLowerCase();
-  
-  // Look for genre/mood keywords
-  const genreKeywords = ['rock', 'pop', 'jazz', 'classical', 'hip hop', 'country', 'electronic', 'indie'];
-  const moodKeywords = ['chill', 'energetic', 'sad', 'happy', 'workout', 'study', 'party', 'relaxing'];
-  
-  for (const genre of genreKeywords) {
-    if (text.includes(genre)) {
-      return `My ${genre.charAt(0).toUpperCase() + genre.slice(1)} Playlist`;
+  const generatePlaylistName = (transcription) => {
+    const text = transcription.toLowerCase();
+    
+    const genreKeywords = ['rock', 'pop', 'jazz', 'classical', 'hip hop', 'country', 'electronic', 'indie'];
+    const moodKeywords = ['chill', 'energetic', 'sad', 'happy', 'workout', 'study', 'party', 'relaxing'];
+    
+    for (const genre of genreKeywords) {
+      if (text.includes(genre)) {
+        return `My ${genre.charAt(0).toUpperCase() + genre.slice(1)} Playlist`;
+      }
     }
-  }
-  
-  for (const mood of moodKeywords) {
-    if (text.includes(mood)) {
-      return `${mood.charAt(0).toUpperCase() + mood.slice(1)} Vibes`;
+    
+    for (const mood of moodKeywords) {
+      if (text.includes(mood)) {
+        return `${mood.charAt(0).toUpperCase() + mood.slice(1)} Vibes`;
+      }
     }
-  }
-  
-  // Default name with timestamp
-  const date = new Date().toLocaleDateString();
-  return `StorySound Playlist - ${date}`;
-};
+    
+    const date = new Date().toLocaleDateString();
+    return `StorySound Playlist - ${date}`;
+  };
 
-
-const SpotifyAuthSection = () => (
-  <div className="spotify-auth-section">
-    {!spotifyAuth.isAuthenticated ? (
-      <div className="auth-prompt">
-        <h4>🎵 Save to Spotify</h4>
-        <p>Connect your Spotify account to create playlists from your audio</p>
-        <button 
-          onClick={handleSpotifyLogin}
-          disabled={spotifyAuth.isLoading}
-          className="spotify-login-button"
-        >
-          {spotifyAuth.isLoading ? 'Connecting...' : 'Connect Spotify'}
-        </button>
-      </div>
-    ) : (
-      <div className="auth-success">
-        <div className="user-info">
-          <span className="welcome-text">
-            🎧 Connected as {spotifyAuth.user.display_name || spotifyAuth.user.id}
-          </span>
-          <button onClick={handleSpotifyLogout} className="logout-button">
-            Disconnect
+  const SpotifyAuthSection = () => (
+    <div className="spotify-auth-section">
+      {!spotifyAuth.isAuthenticated ? (
+        <div className="auth-prompt">
+          <h4>🎵 Save to Spotify</h4>
+          <p>Connect your Spotify account to create playlists from your audio</p>
+          <button 
+            onClick={handleSpotifyLogin}
+            disabled={spotifyAuth.isLoading}
+            className="spotify-login-button"
+          >
+            {spotifyAuth.isLoading ? 'Connecting...' : 'Connect Spotify'}
           </button>
         </div>
-        
-        {spotifyTracks.length > 0 && (
-          <div className="playlist-creation">
-            <button 
-              onClick={createSpotifyPlaylist}
-              disabled={playlistCreation.isCreating}
-              className="create-playlist-button"
-            >
-              {playlistCreation.isCreating ? 'Creating Playlist...' : 'Create Spotify Playlist'}
+      ) : (
+        <div className="auth-success">
+          <div className="user-info">
+            <span className="welcome-text">
+              🎧 Connected as {spotifyAuth.user.display_name || spotifyAuth.user.id}
+            </span>
+            <button onClick={handleSpotifyLogout} className="logout-button">
+              Disconnect
             </button>
-            
-            {playlistCreation.error && (
-              <div className="creation-error">
-                <p>❌ {playlistCreation.error}</p>
-              </div>
-            )}
-            
-            {playlistCreation.success && (
-              <div className="creation-success">
-                <p>✅ Playlist created successfully!</p>
-                <a 
-                  href={playlistCreation.success.url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="playlist-link"
-                >
-                  Open "{playlistCreation.success.name}" in Spotify
-                </a>
-                <p className="track-count">
-                  {playlistCreation.success.tracks_added} tracks added
-                </p>
-              </div>
-            )}
           </div>
-        )}
-      </div>
-    )}
-  </div>
-);
+          
+          {spotifyTracks.length > 0 && (
+            <div className="playlist-creation">
+              <button 
+                onClick={createSpotifyPlaylist}
+                disabled={playlistCreation.isCreating}
+                className="create-playlist-button"
+              >
+                {playlistCreation.isCreating ? 'Creating Playlist...' : 'Create Spotify Playlist'}
+              </button>
+              
+              {playlistCreation.error && (
+                <div className="creation-error">
+                  <p>❌ {playlistCreation.error}</p>
+                </div>
+              )}
+              
+              {playlistCreation.success && (
+                <div className="creation-success">
+                  <p>✅ Playlist created successfully!</p>
+                  <a 
+                    href={playlistCreation.success.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="playlist-link"
+                  >
+                    Open "{playlistCreation.success.name}" in Spotify
+                  </a>
+                  <p className="track-count">
+                    {playlistCreation.success.tracks_added} tracks added
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
-  // YouTube preview handler
   const handleYouTubePreview = (track) => {
     console.log('Opening YouTube preview for:', track.name);
   
-  // Stop any Spotify preview
-  if (currentPreview) {
-    currentPreview.pause();
-    setCurrentPreview(null);
-    setIsPreviewPlaying(false);
+    if (currentPreview) {
+      currentPreview.pause();
+      setCurrentPreview(null);
+      setIsPreviewPlaying(false);
+    }
+
+    if (youtubeModal && youtubeModal.videoId === track.youtube_preview.videoId) {
+      console.log('Modal already open for this track, closing');
+      setYoutubeModal(null);
+      return;
+    }
+
+    setYoutubeModal({
+      videoId: track.youtube_preview.videoId,
+      song: track.name,
+      artist: track.artist,
+      embedUrl: track.youtube_preview.embedUrl
+    });
   }
 
-  // Check if modal is already open for this track
-  if (youtubeModal && youtubeModal.videoId === track.youtube_preview.videoId) {
-    console.log('Modal already open for this track, closing');
-    setYoutubeModal(null);
-    return;
-  }
-
-  // Open YouTube modal
-  setYoutubeModal({
-    videoId: track.youtube_preview.videoId,
-    song: track.name,
-    artist: track.artist,
-    embedUrl: track.youtube_preview.embedUrl
-  });
-}
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Function to process audio and generate playlist
   const processAudioAndGeneratePlaylist = async (audioBlob) => {
     if (!audioBlob) return;
     
@@ -702,7 +694,6 @@ const SpotifyAuthSection = () => (
       
       const data = await response.json();
       
-      // Enhanced debugging for hybrid system
       console.log('=== HYBRID PREVIEW DEBUG ===');
       console.log('Full response:', data);
       console.log('Spotify tracks array:', data.spotifyTracks);
@@ -724,7 +715,6 @@ const SpotifyAuthSection = () => (
           }
         });
         
-        // Summary
         const spotifyCount = data.spotifyTracks.filter(t => t.preview_url).length;
         const youtubeCount = data.spotifyTracks.filter(t => t.youtube_preview).length;
         const noPreviewCount = data.spotifyTracks.filter(t => !t.preview_url && !t.youtube_preview).length;
@@ -740,7 +730,6 @@ const SpotifyAuthSection = () => (
       }
       console.log('=== END HYBRID DEBUG ===');
 
-      // Update state with all the response data
       setTranscription(data.transcription || 'No transcription available');
       setAiRecommendations(data.aiRecommendations || []);
       setSpotifyTracks(data.spotifyTracks || []);
@@ -770,7 +759,6 @@ const SpotifyAuthSection = () => (
       setIsRecording(true);
       audioChunksRef.current = [];
       
-      // Clear previous results
       setTranscription('');
       setSpotifyTracks([]);
       setAiRecommendations([]);
@@ -812,7 +800,6 @@ const SpotifyAuthSection = () => (
           streamRef.current.getTracks().forEach(track => track.stop());
         }
         
-        // Automatically process audio and generate playlist
         processAudioAndGeneratePlaylist(audioBlob);
       };
       
@@ -868,7 +855,6 @@ const SpotifyAuthSection = () => (
   };
 
   const handleNewRecording = () => {
-    // Stop any playing previews
     if (currentPreview) {
       currentPreview.pause();
       setCurrentPreview(null);
@@ -939,6 +925,16 @@ const SpotifyAuthSection = () => (
     );
   };
 
+  // Show loading screen while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       {/* Animated background */}
@@ -965,7 +961,6 @@ const SpotifyAuthSection = () => (
         }}
       ></div>
       )}
-     
 
       {/* Main content */}
       <div className={`container ${isLoaded ? 'loaded' : ''}`}>
@@ -974,22 +969,32 @@ const SpotifyAuthSection = () => (
             <span className="logo-text">StorySounds</span>
             <div className="logo-pulse"></div>
           </div>
-          {/* <button 
-            className="test-connection-btn"
-            onClick={handleTestConnection}
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              color: 'white',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            Test Backend
-          </button> */}
+          
+          <div className="header-actions">
+            {isAuthenticated ? (
+              <UserMenu />
+            ) : (
+              <AuthButton onSignIn={handleSignIn} onSignUp={handleSignUp} />
+            )}
+            
+            <button 
+              className="test-connection-btn"
+              onClick={handleTestConnection}
+              style={{
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                padding: '0.5rem 1rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                marginLeft: '1rem'
+              }}
+            >
+              Test Backend
+            </button>
+          </div>
         </header>
 
         <main className="main">
@@ -1003,6 +1008,8 @@ const SpotifyAuthSection = () => (
               <p className="subtext">
                 Speak a vibe, a moment, or a mood. We'll transcribe it and create a Spotify playlist that matches perfectly.
               </p>
+
+              
 
               {!audioBlob && !transcription ? (
                 <button 
@@ -1240,6 +1247,7 @@ const SpotifyAuthSection = () => (
                   <div className="feature-icon">🎧</div>
                   <span>Spotify Integration</span>
                 </div>
+                
               </div>
             </div>
 
@@ -1258,26 +1266,29 @@ const SpotifyAuthSection = () => (
             </div>
           </div>
         </main>
-         <button 
-        className="feedback-trigger-button"
-        onClick={() => setIsFeedbackModalOpen(true)}
-      >
-        💬 Feedback
-      </button>
-      
-      {/* Feedback Modal */}
-      <FeedbackModal 
-        isOpen={isFeedbackModalOpen}
-        onClose={() => setIsFeedbackModalOpen(false)}
-      />
-       
+
+        <button 
+          className="feedback-trigger-button"
+          onClick={() => setIsFeedbackModalOpen(true)}
+        >
+          💬 Feedback
+        </button>
+        
+        {/* Modals */}
+        <FeedbackModal 
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+        />
+        
+        <AuthModal 
+          isOpen={isAuthModalOpen}
+          onClose={closeAuthModal}
+          initialMode={authModalMode}
+        />
 
         <footer className="footer">
           <div className="footer-content">
             <p>&copy; 2025 StorySounds. Experience music like never before.</p>
-            {/* <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '0.5rem' }}>
-              Backend: {API_BASE_URL}
-            </p> */}
           </div>
         </footer>
       </div>
@@ -1288,6 +1299,15 @@ const SpotifyAuthSection = () => (
         onClose={() => setYoutubeModal(null)} 
       />
     </div>
+  );
+};
+
+// Main App wrapper with AuthProvider
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
