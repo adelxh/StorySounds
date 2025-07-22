@@ -194,7 +194,7 @@ const AppContent = () => {
   const [aiRecommendations, setAiRecommendations] = useState([]);
   const [playlistSummary, setPlaylistSummary] = useState(null);
   const [processingError, setProcessingError] = useState('');
-  
+  const [textInput, setTextInput] = useState(''); // for text inputs instead of recording
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const audioRef = useRef(null);
@@ -226,6 +226,44 @@ const AppContent = () => {
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);
   };
+
+  // instead of recording the voice we send the text input straight to transcribe api since transcription from audio isnt needed
+  const handleTextSubmit = async () => {
+  if (!textInput.trim()) return;
+  
+  setIsProcessing(true);
+  setProcessingError('');
+  
+  try {
+    // Use the text input as transcription and process it
+    setTranscription(textInput.trim());
+    
+    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/transcribe/text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        transcription: textInput.trim(),
+        skipTranscription: true // Skip actual transcription since we have text
+      })
+    });
+
+    if (!response.ok) throw new Error('Processing failed');
+    
+    const data = await response.json();
+    setAiRecommendations(data.recommendations || []);
+    setSpotifyTracks(data.spotifyTracks || []);
+    setPlaylistSummary(data.summary || '');
+    
+    // Clear the input after successful submission
+    setTextInput('');
+    
+  } catch (error) {
+    console.error('Error processing text:', error);
+    setProcessingError('Failed to process your request. Please try again.');
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   // All your existing useEffect hooks
   useEffect(() => {
@@ -1012,26 +1050,59 @@ const AppContent = () => {
               
 
               {!audioBlob && !transcription ? (
-                <button 
-                  className={`cta-button ${isRecording ? 'recording' : ''}`}
-                  onClick={isRecording ? handleStopRecording : handleStartRecording}
-                  disabled={isRecording && recordingTime < 1}
-                >
-                  <div className="button-content">
-                    <span className="mic-icon">
-                      {isRecording ? '⏹️' : '🎙️'}
-                    </span>
-                    <span className="button-text">
-                      {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Start Recording'}
-                    </span>
-                  </div>
-                  {isRecording && (
-                    <div className="recording-indicator">
-                      <div className="pulse"></div>
-                    </div>
-                  )}
-                </button>
-              ) : (
+                <div className="input-recording-container">
+    {/* Text Input with Send Button */}
+    <div className="text-input-container">
+      <input
+        type="text"
+        value={textInput}
+        onChange={(e) => setTextInput(e.target.value)}
+        placeholder="Describe your mood, vibe, or the music you're looking for..."
+        className="text-input"
+        onKeyPress={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleTextSubmit();
+          }
+        }}
+        disabled={isProcessing}
+      />
+      <button
+        className="send-button"
+        onClick={handleTextSubmit}
+        disabled={!textInput.trim() || isProcessing}
+      >
+        <span className="send-icon">📤</span>
+      </button>
+    </div>
+
+    {/* Divider */}
+    <div className="input-divider">
+      <span>or</span>
+    </div>
+
+    {/* Recording Button */}
+    <button 
+      className={`cta-button ${isRecording ? 'recording' : ''}`}
+      onClick={isRecording ? handleStopRecording : handleStartRecording}
+      disabled={isRecording && recordingTime < 1}
+    >
+      <div className="button-content">
+        <span className="mic-icon">
+          {isRecording ? '⏹️' : '🎙️'}
+        </span>
+        <span className="button-text">
+          {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Start Recording'}
+        </span>
+      </div>
+      {isRecording && (
+        <div className="recording-indicator">
+          <div className="pulse"></div>
+        </div>
+      )}
+    </button>
+  </div>
+)  : (
                 <div className="recording-results">
                   <div className="playback-controls">
                     <audio 

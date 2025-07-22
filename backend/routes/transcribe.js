@@ -12,9 +12,9 @@ const openai = new OpenAI({
 });
 
 // Use environment variables first, fallback to hardcoded (not recommended for production)
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 
 // Debug: Check API keys
 console.log('=== API KEYS CHECK ===');
@@ -1008,7 +1008,110 @@ router.get('/', (req, res) => {
   });
 });
 
-// FIXED: Main endpoint with proper flow
+router.post('/text', async (req, res) => {
+  try {
+    console.log('📝 Processing text input request...');
+    
+    const { transcription, skipTranscription } = req.body;
+    
+    if (!transcription || typeof transcription !== 'string' || !transcription.trim()) {
+      return res.status(400).json({ error: 'No transcription text provided' });
+    }
+
+    const transcriptionText = transcription.trim();
+    console.log('Text input received:', transcriptionText);
+
+    try {
+      // Skip transcription step since we already have text
+      console.log('Generating song recommendations from text...');
+      const initialRecommendations = await generateSongRecommendations(transcriptionText);
+      console.log(`Generated ${initialRecommendations.length} song recommendations`);
+
+      console.log('Validating cultural authenticity...');
+      const validatedRecommendations = await validateCulturalRecommendations(transcriptionText, initialRecommendations);
+      console.log(`Validated ${validatedRecommendations.length} culturally authentic recommendations`);
+
+      console.log('Getting Spotify access token...');
+      const spotifyToken = await getCachedSpotifyAccessToken();
+
+      console.log('Searching for tracks on Spotify...');
+      const spotifyTracks = await findSpotifyTracks(validatedRecommendations, spotifyToken, transcriptionText);
+      console.log(`Found ${spotifyTracks.length} tracks on Spotify`);
+
+      // Enhanced tracks with YouTube previews
+      console.log('Adding YouTube previews...');
+      const enhancedTracks = await Promise.all(
+        spotifyTracks.map(async (track) => {
+          const artistName = track.artists && track.artists.length > 0 ? track.artists[0].name : 'Unknown Artist';
+          const youtubePreview = await getYouTubePreview(track.name, artistName);
+          return {
+            ...track,
+            youtube_preview: youtubePreview
+          };
+        })
+      );
+
+      // Count preview types
+      const spotifyPreviews = enhancedTracks.filter(track => track.preview_url).length;
+      const youtubePreviews = enhancedTracks.filter(track => track.youtube_preview).length;
+
+      const response = {
+        success: true,
+        transcription: transcriptionText,
+        recommendations: validatedRecommendations.map(rec => ({
+          song: rec.song,
+          artist: rec.artist,
+          reason: rec.reason
+        })),
+        spotifyTracks: enhancedTracks.map(track => ({
+          id: track.uri,
+          name: track.name,
+          artist: track.artists && track.artists.length > 0 ? track.artists[0].name : 'Unknown Artist',
+          album: track.album?.name,
+          preview_url: track.preview_url,
+          youtube_preview: track.youtube_preview,
+          external_urls: track.external_urls,
+          image: track.album?.images?.[0]?.url,
+          recommendation: track.recommendation
+        })),
+        playlistSummary: {
+          totalRecommended: validatedRecommendations.length,
+          foundOnSpotify: enhancedTracks.length,
+          spotifyPreviews: spotifyPreviews,
+          youtubePreviews: youtubePreviews,
+          totalPreviews: spotifyPreviews + youtubePreviews,
+          culturalValidation: true,
+          success: true
+        }
+      };
+
+      res.json(response);
+
+    } catch (processingError) {
+      console.error('Text processing error:', processingError);
+      
+      if (processingError.status === 400) {
+        res.status(400).json({ 
+          error: 'Invalid text input or content',
+          details: processingError.message
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Processing error',
+          details: processingError.message
+        });
+      }
+    }
+
+  } catch (err) {
+    console.error('❌ Server error:', err);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: err.message
+    });
+  }
+});
+
 router.post('/', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
