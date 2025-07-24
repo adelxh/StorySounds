@@ -1,5 +1,6 @@
 // src/components/UserMenu.js
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './UserMenu.css';
 
@@ -7,6 +8,7 @@ const UserMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signout, isPremium } = useAuth();
   const menuRef = useRef(null);
+    const navigate = useNavigate();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -24,6 +26,10 @@ const UserMenu = () => {
     await signout();
     setIsOpen(false);
   };
+  const handlePlaylistHistory = async () => {
+    setIsOpen(false); 
+    navigate('/playlist-history')
+  }
 
   if (!user) return null;
 
@@ -65,7 +71,7 @@ const UserMenu = () => {
               Profile Settings
             </button>
             
-            <button className="menu-item">
+            <button className="menu-item" onClick={handlePlaylistHistory}>
               <span className="menu-icon">🎵</span>
               Playlist History
             </button>

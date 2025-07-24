@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
 // Authentication imports
@@ -7,8 +8,11 @@ import AuthModal from './components/AuthModal';
 import UserMenu from './components/UserMenu';
 import AuthButton from './components/AuthButton';
 
+// Import the new PlaylistHistory component
+import PlaylistHistory from './components/PlaylistHistory';
+
 // API Base URL
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://9c20d55f4d12.ngrok-free.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://storysounds.onrender.com'; // https://6862e2cd5dcb.ngrok-free.app
 const fetchWithNgrokHeaders = async (url, options = {}) => {
   const defaultOptions = {
     headers: {
@@ -165,8 +169,8 @@ const FeedbackModal = ({isOpen, onClose}) => {
   );
 }
 
-// Main App Content Component
-const AppContent = () => {
+// Homepage Component - Contains all your existing main app logic
+const HomePage = () => {
   // Authentication state
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -227,43 +231,43 @@ const AppContent = () => {
     setIsAuthModalOpen(false);
   };
 
-  // instead of recording the voice we send the text input straight to transcribe api since transcription from audio isnt needed
+  // All your existing functions - keeping them exactly as they are
   const handleTextSubmit = async () => {
-  if (!textInput.trim()) return;
-  
-  setIsProcessing(true);
-  setProcessingError('');
-  
-  try {
-    // Use the text input as transcription and process it
-    setTranscription(textInput.trim());
+    if (!textInput.trim()) return;
     
-    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/transcribe/text`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        transcription: textInput.trim(),
-        skipTranscription: true // Skip actual transcription since we have text
-      })
-    });
+    setIsProcessing(true);
+    setProcessingError('');
+    
+    try {
+      // Use the text input as transcription and process it
+      setTranscription(textInput.trim());
+      
+      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/transcribe/text`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          transcription: textInput.trim(),
+          skipTranscription: true // Skip actual transcription since we have text
+        })
+      });
 
-    if (!response.ok) throw new Error('Processing failed');
-    
-    const data = await response.json();
-    setAiRecommendations(data.recommendations || []);
-    setSpotifyTracks(data.spotifyTracks || []);
-    setPlaylistSummary(data.summary || '');
-    
-    // Clear the input after successful submission
-    setTextInput('');
-    
-  } catch (error) {
-    console.error('Error processing text:', error);
-    setProcessingError('Failed to process your request. Please try again.');
-  } finally {
-    setIsProcessing(false);
-  }
-};
+      if (!response.ok) throw new Error('Processing failed');
+      
+      const data = await response.json();
+      setAiRecommendations(data.recommendations || []);
+      setSpotifyTracks(data.spotifyTracks || []);
+      setPlaylistSummary(data.summary || '');
+      
+      // Clear the input after successful submission
+      setTextInput('');
+      
+    } catch (error) {
+      console.error('Error processing text:', error);
+      setProcessingError('Failed to process your request. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   // All your existing useEffect hooks
   useEffect(() => {
@@ -548,7 +552,7 @@ const AppContent = () => {
       const playlistName = generatePlaylistName(transcription);
       
       const formattedTracks = spotifyTracks.map(track => ({
-        id: `spotify:track:${track.id}`
+        id: track.id.includes(`spotify:track:`) ? track.id : `spotify:track:${track.id}`
       }));
       
       const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/create-playlist`, {
@@ -612,7 +616,7 @@ const AppContent = () => {
       {!spotifyAuth.isAuthenticated ? (
         <div className="auth-prompt">
           <h4>🎵 Save to Spotify</h4>
-          <p>Connect your Spotify account to create playlists from your audio</p>
+       
           <button 
             onClick={handleSpotifyLogin}
             disabled={spotifyAuth.isLoading}
@@ -700,6 +704,7 @@ const AppContent = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Continue with the rest of your functions...
   const processAudioAndGeneratePlaylist = async (audioBlob) => {
     if (!audioBlob) return;
     
@@ -1047,62 +1052,60 @@ const AppContent = () => {
                 Speak a vibe, a moment, or a mood. We'll transcribe it and create a Spotify playlist that matches perfectly.
               </p>
 
-              
-
               {!audioBlob && !transcription ? (
                 <div className="input-recording-container">
-    {/* Text Input with Send Button */}
-    <div className="text-input-container">
-      <input
-        type="text"
-        value={textInput}
-        onChange={(e) => setTextInput(e.target.value)}
-        placeholder="Describe your mood, vibe, or the music you're looking for..."
-        className="text-input"
-        onKeyPress={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleTextSubmit();
-          }
-        }}
-        disabled={isProcessing}
-      />
-      <button
-        className="send-button"
-        onClick={handleTextSubmit}
-        disabled={!textInput.trim() || isProcessing}
-      >
-        <span className="send-icon">📤</span>
-      </button>
-    </div>
+                  {/* Text Input with Send Button */}
+                  <div className="text-input-container">
+                    <input
+                      type="text"
+                      value={textInput}
+                      onChange={(e) => setTextInput(e.target.value)}
+                      placeholder="Describe your mood, vibe, or the music you're looking for..."
+                      className="text-input"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleTextSubmit();
+                        }
+                      }}
+                      disabled={isProcessing}
+                    />
+                    <button
+                      className="send-button"
+                      onClick={handleTextSubmit}
+                      disabled={!textInput.trim() || isProcessing}
+                    >
+                      <span className="send-icon">📤</span>
+                    </button>
+                  </div>
 
-    {/* Divider */}
-    <div className="input-divider">
-      <span>or</span>
-    </div>
+                  {/* Divider */}
+                  <div className="input-divider">
+                    <span>or</span>
+                  </div>
 
-    {/* Recording Button */}
-    <button 
-      className={`cta-button ${isRecording ? 'recording' : ''}`}
-      onClick={isRecording ? handleStopRecording : handleStartRecording}
-      disabled={isRecording && recordingTime < 1}
-    >
-      <div className="button-content">
-        <span className="mic-icon">
-          {isRecording ? '⏹️' : '🎙️'}
-        </span>
-        <span className="button-text">
-          {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Start Recording'}
-        </span>
-      </div>
-      {isRecording && (
-        <div className="recording-indicator">
-          <div className="pulse"></div>
-        </div>
-      )}
-    </button>
-  </div>
-)  : (
+                  {/* Recording Button */}
+                  <button 
+                    className={`cta-button ${isRecording ? 'recording' : ''}`}
+                    onClick={isRecording ? handleStopRecording : handleStartRecording}
+                    disabled={isRecording && recordingTime < 1}
+                  >
+                    <div className="button-content">
+                      <span className="mic-icon">
+                        {isRecording ? '⏹️' : '🎙️'}
+                      </span>
+                      <span className="button-text">
+                        {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Start Recording'}
+                      </span>
+                    </div>
+                    {isRecording && (
+                      <div className="recording-indicator">
+                        <div className="pulse"></div>
+                      </div>
+                    )}
+                  </button>
+                </div>
+              )  : (
                 <div className="recording-results">
                   <div className="playback-controls">
                     <audio 
@@ -1318,7 +1321,6 @@ const AppContent = () => {
                   <div className="feature-icon">🎧</div>
                   <span>Spotify Integration</span>
                 </div>
-                
               </div>
             </div>
 
@@ -1373,11 +1375,29 @@ const AppContent = () => {
   );
 };
 
-// Main App wrapper with AuthProvider
+// Main App Content Component with routing
+const AppContent = () => {
+  return (
+    <Routes>
+      {/* Homepage route */}
+      <Route path="/" element={<HomePage />} />
+      
+      {/* Playlist History route */}
+      <Route path="/playlist-history" element={<PlaylistHistory />} />
+      
+      {/* Redirect any unknown routes to homepage */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+};
+
+// Main App wrapper with AuthProvider and Router
 const App = () => {
   return (
     <AuthProvider>
-      <AppContent />
+      <Router>
+        <AppContent />
+      </Router>
     </AuthProvider>
   );
 };

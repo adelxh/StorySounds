@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.js
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://9c20d55f4d12.ngrok-free.app';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://storysounds.onrender.com'; // https://6862e2cd5dcb.ngrok-free.app
 
 const AuthContext = createContext();
 
