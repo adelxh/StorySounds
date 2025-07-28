@@ -5,7 +5,7 @@ import './AuthButton.css';
 const AuthButton = ({ onSignIn, onSignUp }) => {
   return (
     <div className="auth-buttons">
-      <button 
+      {/* <button 
         className="auth-btn signin-btn"
         onClick={onSignIn}
       >
@@ -16,7 +16,7 @@ const AuthButton = ({ onSignIn, onSignUp }) => {
         onClick={onSignUp}
       >
         Get Started
-      </button>
+      </button> */}
     </div>
   );
 };

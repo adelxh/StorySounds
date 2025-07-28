@@ -1095,7 +1095,7 @@ const HomePage = () => {
                         {isRecording ? '⏹️' : '🎙️'}
                       </span>
                       <span className="button-text">
-                        {isRecording ? `Recording... ${formatTime(recordingTime)}` : 'Start Recording'}
+                        {isRecording ? `Recording... ${formatTime(recordingTime)}` : `Record The Vibe You're Feeling`}
                       </span>
                     </div>
                     {isRecording && (

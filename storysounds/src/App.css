@@ -304,7 +304,9 @@ body {
   background: rgba(255, 255, 255, 0.15);
   box-shadow: 0 8px 30px rgba(102, 126, 234, 0.2);
 }
-
+input {
+  font-size: 16px !important;
+}
 /* Text Input Field */
 .text-input {
   flex: 1;
@@ -506,6 +508,7 @@ body {
 .mic-icon {
   font-size: 1.3rem;
 }
+
 
 .recording-indicator {
   position: absolute;
