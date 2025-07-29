@@ -9,7 +9,7 @@ const createTransport = () => {
     service: 'gmail', // or 'outlook', 'yahoo', etc.
     auth: {
       user: 'storysoundsai@gmail.com', // Your email
-      pass: ''  // App password (not your regular password)
+      pass: process.env.EMAIL_PASS  // App password (not your regular password)
     }
   });
 };

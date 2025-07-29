@@ -1020,7 +1020,7 @@ const HomePage = () => {
               <AuthButton onSignIn={handleSignIn} onSignUp={handleSignUp} />
             )}
             
-            <button 
+            {/* <button 
               className="test-connection-btn"
               onClick={handleTestConnection}
               style={{
@@ -1036,7 +1036,7 @@ const HomePage = () => {
               }}
             >
               Test Backend
-            </button>
+            </button> */}
           </div>
         </header>
 
