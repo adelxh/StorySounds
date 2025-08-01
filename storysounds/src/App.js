@@ -7,6 +7,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthModal from './components/AuthModal';
 import UserMenu from './components/UserMenu';
 import AuthButton from './components/AuthButton';
+import Analytics from './components/Analytics';
+import useAnalytics from './hooks/useAnalytics';
 
 // Import the new PlaylistHistory component
 import PlaylistHistory from './components/PlaylistHistory';
@@ -1377,6 +1379,7 @@ const HomePage = () => {
 
 // Main App Content Component with routing
 const AppContent = () => {
+  useAnalytics();
   return (
     <Routes>
       {/* Homepage route */}
@@ -1396,6 +1399,7 @@ const App = () => {
   return (
     <AuthProvider>
       <Router>
+        <Analytics />
         <AppContent />
       </Router>
     </AuthProvider>
