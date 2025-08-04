@@ -79,11 +79,11 @@ router.get('/callback', async (req, res) => {
     console.log(`✅ Stored auth for user: ${userId}`);
     
     // Redirect to frontend with success
-    res.redirect(`http://adel-testing.netlify.app?spotify_auth=success&user_id=${userId}&user_name=${encodeURIComponent(userResponse.data.display_name || userResponse.data.id)}`);
+    res.redirect(`https://storysounds.app?spotify_auth=success&user_id=${userId}&user_name=${encodeURIComponent(userResponse.data.display_name || userResponse.data.id)}`);
     
   } catch (error) {
     console.error('Error exchanging code for token:', error);
-    res.redirect('http://adel-testing.netlify.app?error=auth_failed');
+    res.redirect('http://storysounds.app?error=auth_failed');
   }
 });
 
