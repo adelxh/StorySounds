@@ -1154,6 +1154,10 @@ input {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  font-family: inherit;
+  font-weight: inherit;
+  justify-content: center;
+  
   gap: 0.3rem;
   transition: all 0.3s ease;
 }
@@ -1384,6 +1388,8 @@ input {
   font-size: 0.75rem;
   cursor: pointer;
   text-decoration: none;
+  font-family: inherit;
+  font-weight: inherit;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -1730,6 +1736,7 @@ input {
   text-decoration: none;
   display: inline-block;
   transition: all 0.3s ease;
+  font-family: inherit;
   margin: 0.5rem 0;
 }
 .track-count {

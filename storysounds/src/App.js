@@ -657,14 +657,12 @@ const HomePage = () => {
               {playlistCreation.success && (
                 <div className="creation-success">
                   <p>✅ Playlist created successfully!</p>
-                  <a 
-                    href={playlistCreation.success.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
+                  <button 
+                   onClick={() => window.open(playlistCreation.success.url, '_blank', 'noopener,noreferrer')}
                     className="playlist-link"
                   >
                     Open "{playlistCreation.success.name}" in Spotify
-                  </a>
+                  </button>
                   <p className="track-count">
                     {playlistCreation.success.tracks_added} tracks added
                   </p>
@@ -1268,26 +1266,26 @@ const HomePage = () => {
                                   
                                   {/* Spotify link */}
                                   {track.external_urls?.spotify && (
-                                    <a 
-                                      href={track.external_urls.spotify}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <button 
+                                     
+                                      onClick={(e) => {
+                                       
+                                        window.open(track.external_urls.spotify, '_blank', 'noopener,noreferrer')
+                                      }}
                                       className="spotify-link"
                                     >
                                       🎧 Open in Spotify
-                                    </a>
+                                    </button>
                                   )}
                                   
                                   {/* YouTube link (if available) */}
                                   {track.youtube_preview && (
-                                    <a 
-                                      href={track.youtube_preview.youtubeUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <button 
+                                      onClick={() => window.open(track.youtube_preview.youtubeUrl, '_blank', 'noopener,noreferrer')}
                                       className="youtube-link"
                                     >
                                       📺 YouTube
-                                    </a>
+                                    </button>
                                   )}
                                 </div>
                               </div>

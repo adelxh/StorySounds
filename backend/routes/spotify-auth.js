@@ -35,13 +35,13 @@ router.get('/callback', async (req, res) => {
   const { code, state } = req.query;
   
   if (!state || !authSessions.has(state)) {
-    return res.redirect('http://adel-testing.netlify.app?error=invalid_state');
+    return res.redirect('https://storysounds.app?error=invalid_state');
   }
   
   authSessions.delete(state);
   
   if (!code) {
-    return res.redirect('http://adel-testing.netlify.app?error=no_code');
+    return res.redirect('https://storysounds.app?error=no_code');
   }
   
   try {
