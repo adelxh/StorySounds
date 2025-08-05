@@ -545,51 +545,58 @@ const HomePage = () => {
     });
   };
 
-  const createSpotifyPlaylist = async () => {
-    if (!spotifyAuth.isAuthenticated || !spotifyTracks.length) return;
+const createSpotifyPlaylist = async () => {
+  if (!spotifyAuth.isAuthenticated || spotifyTracks.length === 0) return;
+  
+  setPlaylistCreation({
+    isCreating: true,
+    error: null,
+    success: null
+  });
+  
+  try {
+    const playlistName = generatePlaylistName(transcription);
     
-    setPlaylistCreation({ isCreating: true, error: null, success: null });
+    // Format tracks for Spotify
+    const formattedTracks = spotifyTracks.map(track => ({
+      id: track.uri || (track.id.startsWith('spotify:') ? track.id : `spotify:track:${track.id}`)
+    }));
     
-    try {
-      const playlistName = generatePlaylistName(transcription);
-      
-      const formattedTracks = spotifyTracks.map(track => ({
-        id: track.id.includes(`spotify:track:`) ? track.id : `spotify:track:${track.id}`
-      }));
-      
-      const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/create-playlist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId: spotifyAuth.user.id,
-          playlistName: playlistName,
-          description: `Created from audio: "${transcription.substring(0, 100)}..."`,
-          tracks: formattedTracks
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        setPlaylistCreation({
-          isCreating: false,
-          error: null,
-          success: data.playlist
-        });
-      } else {
-        throw new Error(data.error || 'Failed to create playlist');
-      }
-    } catch (error) {
-      console.error('Error creating playlist:', error);
+    console.log(`Creating Spotify playlist with ${formattedTracks.length} tracks...`);
+    
+    const response = await fetchWithNgrokHeaders(`${API_BASE_URL}/api/spotify/create-playlist`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        userId: spotifyAuth.user.id,
+        playlistName: playlistName,
+        description: `Created from: "${transcription.substring(0, 80)}..." - ${formattedTracks.length} curated tracks`,
+        tracks: formattedTracks
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok && data.success) {
       setPlaylistCreation({
         isCreating: false,
-        error: error.message,
-        success: null
+        error: null,
+        success: data.playlist
       });
+    } else {
+      throw new Error(data.error || 'Failed to create playlist');
     }
-  };
+  } catch (error) {
+    console.error('Error creating playlist:', error);
+    setPlaylistCreation({
+      isCreating: false,
+      error: error.message,
+      success: null
+    });
+  }
+};
 
   const generatePlaylistName = (transcription) => {
     const text = transcription.toLowerCase();
@@ -1145,7 +1152,7 @@ const HomePage = () => {
                         <div className="loading-spinner"></div>
                         <div className="processing-steps">
                           <p>🎤 Transcribing your audio...</p>
-                          <p>🤖 Generating song recommendations...</p>
+                          <p>🤖 Generating 50 song recommendations...</p>
                           <p>🎵 Finding tracks on Spotify...</p>
                           <p>📺 Adding YouTube previews...</p>
                           <p>📋 Creating your playlist...</p>

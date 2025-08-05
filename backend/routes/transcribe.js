@@ -12,9 +12,9 @@ const openai = new OpenAI({
 });
 
 // Use environment variables first, fallback to hardcoded (not recommended for production)
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // Debug: Check API keys
 console.log('=== API KEYS CHECK ===');
@@ -424,13 +424,14 @@ async function searchSpotifyTracks(query, accessToken, limit = 10) {
 async function generateSongRecommendations(transcription) {
   try {
     console.log(`Input transcription: ${transcription}`)
-    const prompt = `Based on this user's request: "${transcription}, generate a list of 15 specific songs that match their request exactly, and exactly how they would appear in SPOTIFY. The songs have to be on spotify no exceptions."
+    const prompt = `Based on this user's request: "${transcription}, generate a list of 50 specific songs that match their request exactly, and exactly how they would appear in SPOTIFY. The songs have to be on spotify no exceptions."
 
-Generate a list of 15 specific songs that match their request exactly. 
+Generate a list of 50 specific songs that match their request exactly. 
 
 Important rules:
 - If they ask for songs from a specific country (like Russian, French, etc.), ONLY recommend songs from that country/language
 - If they ask for a specific genre, focus on that genre
+- if they ask for songs from a specific year (like songs from 2012)
 - If they ask for a specific mood or theme, match that exactly
 - Use real, popular songs that can be found on Spotify
 
@@ -460,7 +461,7 @@ console.log('🤖 Sending prompt to OpenAI...');
         }
       ],
       temperature: 0.1,
-      max_tokens: 1500, 
+      max_tokens: 2500, 
     });
 
      const responseText = completion.choices[0].message.content;
@@ -551,7 +552,7 @@ async function validateCulturalRecommendations(transcription, recommendations) {
         }
       ],
       temperature: 0.1,
-      max_tokens: 500
+      max_tokens: 800 // Increased for 50 songs
     });
 
     const validationResponse = validation.choices[0].message.content;
@@ -566,9 +567,9 @@ async function validateCulturalRecommendations(transcription, recommendations) {
     console.log(`✅ Cultural validation: ${validRecommendations.length}/${recommendations.length} songs validated`);
     
     // If too many songs were filtered out, generate additional ones
-    if (validRecommendations.length < 10) {
+    if (validRecommendations.length < 30) { // Increased threshold from 10 to 30 for 50-song lists
       console.log(`🔄 Only ${validRecommendations.length} valid songs, generating more...`);
-      const additionalRecommendations = await generateMoreCulturalSongs(detectedCulture, 15 - validRecommendations.length);
+      const additionalRecommendations = await generateMoreCulturalSongs(detectedCulture, 50 - validRecommendations.length);
       return [...validRecommendations, ...additionalRecommendations];
     }
 
@@ -585,6 +586,8 @@ async function generateMoreCulturalSongs(culture, count) {
     israeli: `Generate ${count} authentic Israeli/Hebrew songs. Include classics like "Hava Nagila", "Jerusalem of Gold", and modern Israeli artists like Idan Raichel, Sarit Hadad, Static & Ben El Tavori.`,
     arabic: `Generate ${count} authentic Arabic songs from various Arab countries. Include classics and modern hits.`,
     russian: `Generate ${count} authentic Russian songs sung in Russian language.`,
+    french: `Generate ${count} authentic French songs. Include chanson française and modern French pop.`,
+    spanish: `Generate ${count} authentic Spanish songs from Spain and Latin America.`,
     // Add more cultures as needed
   };
 
@@ -617,7 +620,7 @@ CRITICAL: Every song must be authentically from ${culture} culture. No exception
         }
       ],
       temperature: 0.1,
-      max_tokens: 1000
+      max_tokens: Math.min(2000, count * 35)
     });
 
     const responseText = completion.choices[0].message.content;
@@ -634,28 +637,36 @@ CRITICAL: Every song must be authentically from ${culture} culture. No exception
   }
 }
 function deduplicateTracks(tracks) {
-  const seen = new Map(); // Use Map to store both key and first occurrence
+  const seen = new Map();
   const deduplicated = [];
   
   console.log(`\n🔄 DEDUPLICATION DEBUG [${new Date().toLocaleTimeString()}]`);
   console.log(`📊 Input: ${tracks.length} tracks`);
   
   for (const track of tracks) {
-    // Create unique key based on track name + first artist (normalized)
-    const normalizedTrackName = track.name.toLowerCase().trim();
-    const normalizedArtistName = track.artists[0].name.toLowerCase().trim();
-    const key = `${normalizedTrackName}___${normalizedArtistName}`;
+    // Create a more lenient unique key
+    const normalizedTrackName = track.name.toLowerCase().trim()
+      .replace(/[^\w\s]/g, '') // Remove special characters
+      .replace(/\s+/g, ' '); // Normalize spaces
+    const normalizedArtistName = track.artists[0].name.toLowerCase().trim()
+      .replace(/[^\w\s]/g, '')
+      .replace(/\s+/g, ' ');
+    
+    // Use first 30 characters of song + first 20 characters of artist for less aggressive matching
+    const shortTrackName = normalizedTrackName.substring(0, 30);
+    const shortArtistName = normalizedArtistName.substring(0, 20);
+    const key = `${shortTrackName}___${shortArtistName}`;
     
     if (!seen.has(key)) {
       seen.set(key, track);
       deduplicated.push(track);
-      console.log(`✅ Added: "${track.name}" by ${track.artists[0].name}`);
+      console.log(`✅ Added #${deduplicated.length}: "${track.name}" by ${track.artists[0].name}`);
     } else {
       const existing = seen.get(key);
       console.log(`🔄 DUPLICATE DETECTED:`);
       console.log(`   Existing: "${existing.name}" by ${existing.artists[0].name}`);
       console.log(`   Duplicate: "${track.name}" by ${track.artists[0].name}`);
-      console.log(`   Skipping duplicate...`);
+      console.log(`   Reason: Similar track/artist names`);
     }
   }
   
@@ -719,7 +730,7 @@ async function findBestMatch(searchResults, recommendation, userTranscription = 
     return null;
   }
   
-  // PHASE 1: Look for exact or very close song matches
+  // PHASE 1: Look for exact or very close song matches (RELAXED THRESHOLDS)
   for (const track of intentFilteredResults) {
     const trackName = track.name.toLowerCase();
     const artistName = track.artists[0].name.toLowerCase();
@@ -738,18 +749,21 @@ async function findBestMatch(searchResults, recommendation, userTranscription = 
     const foundSongWords = songWords.filter(word => cleanTrackName.includes(word));
     const songMatchScore = songWords.length > 0 ? foundSongWords.length / songWords.length : 0;
     
-    // High-confidence matches
-    const isExcellentMatch = artistMatchScore >= 0.8 && songMatchScore >= 0.5;
-    const isGoodMatch = artistMatchScore >= 0.6 && songMatchScore >= 0.3;
+    // RELAXED THRESHOLDS: More lenient matching
+    const isExcellentMatch = artistMatchScore >= 0.6 && songMatchScore >= 0.4; // Reduced thresholds
+    const isGoodMatch = artistMatchScore >= 0.5 && songMatchScore >= 0.2; // Reduced thresholds
+    const isDecentMatch = artistMatchScore >= 0.4 || songMatchScore >= 0.3; // New category
     
-    if (isExcellentMatch || isGoodMatch) {
-      console.log(`    ✅ ${isExcellentMatch ? 'EXCELLENT' : 'GOOD'} MATCH! "${track.name}" by ${track.artists[0].name}`);
+    if (isExcellentMatch || isGoodMatch || isDecentMatch) {
+      const matchType = isExcellentMatch ? 'EXCELLENT' : isGoodMatch ? 'GOOD' : 'DECENT';
+      console.log(`    ✅ ${matchType} MATCH! "${track.name}" by ${track.artists[0].name}`);
+      console.log(`       📊 Artist: ${artistMatchScore.toFixed(2)}, Song: ${songMatchScore.toFixed(2)}`);
       return track;
     }
   }
   
-  // PHASE 2: Find most popular appropriate song by the correct artist
-  console.log(`🔄 No exact song matches. Looking for MOST POPULAR appropriate song by "${recommendation.artist}"`);
+  // PHASE 2: Find most popular song by correct artist (RELAXED ARTIST MATCHING)
+  console.log(`🔄 No song matches. Looking for any song by similar artist to "${recommendation.artist}"`);
   
   const artistMatches = [];
   
@@ -761,7 +775,8 @@ async function findBestMatch(searchResults, recommendation, userTranscription = 
     const foundArtistWords = artistWords.filter(word => artistName.includes(word));
     const artistMatchScore = artistWords.length > 0 ? foundArtistWords.length / artistWords.length : 0;
     
-    if (artistMatchScore >= 0.7) {
+    // RELAXED: Lower threshold for artist matching
+    if (artistMatchScore >= 0.4) { // Reduced from 0.7 to 0.4
       artistMatches.push({
         track,
         artistMatchScore,
@@ -780,14 +795,31 @@ async function findBestMatch(searchResults, recommendation, userTranscription = 
     });
     
     const mostPopular = artistMatches[0];
-    console.log(`    🏆 MOST POPULAR APPROPRIATE: "${mostPopular.track.name}" by "${mostPopular.track.artists[0].name}"`);
+    console.log(`    🏆 FALLBACK MATCH: "${mostPopular.track.name}" by "${mostPopular.track.artists[0].name}"`);
     console.log(`       📈 Popularity: ${mostPopular.popularity}, Artist match: ${mostPopular.artistMatchScore.toFixed(2)}`);
-    console.log(`    📝 Note: Using most popular appropriate song by this artist`);
+    console.log(`    📝 Note: Using popular song by similar artist`);
     
     return mostPopular.track;
   }
   
-  console.log(`  ❌ No suitable artist matches found`);
+  // PHASE 3: Any track that contains key words (LAST RESORT)
+  console.log(`🔄 Trying last resort: any track with similar words`);
+  
+  const songWords = searchSong.split(' ').filter(word => word.length > 3);
+  if (songWords.length > 0) {
+    for (const track of intentFilteredResults) {
+      const trackName = track.name.toLowerCase();
+      const foundWords = songWords.filter(word => trackName.includes(word));
+      
+      if (foundWords.length >= Math.min(2, songWords.length)) {
+        console.log(`    🎯 WORD MATCH: "${track.name}" by "${track.artists[0].name}"`);
+        console.log(`       📝 Matched words: ${foundWords.join(', ')}`);
+        return track;
+      }
+    }
+  }
+  
+  console.log(`  ❌ No suitable matches found at all`);
   return null;
 }
 
@@ -799,60 +831,71 @@ async function searchSingleTrack(recommendation, accessToken, userTranscription 
   
   try {
     // STRATEGY 1: Combined artist + song search
-    const combinedQuery = `${recommendation.artist} ${recommendation.song}`;
-    console.log(`📤 Combined search: "${combinedQuery}"`);
+    const combinedQuery = `"${recommendation.artist}" "${recommendation.song}"`;
+    console.log(`📤 Strategy 1 - Exact combined: ${combinedQuery}`);
     
-    const combinedResults = await searchSpotifyTracks(combinedQuery, accessToken, 10);
-    console.log(`📥 Combined search returned ${combinedResults.length} results`);
+    let combinedResults = await searchSpotifyTracks(combinedQuery, accessToken, 25);
+    console.log(`📥 Strategy 1 returned ${combinedResults.length} results`);
     
     if (combinedResults.length > 0) {
       const combinedMatch = await findBestMatch(combinedResults, recommendation, userTranscription);
       if (combinedMatch) {
-        console.log(`✅ FOUND with combined search: "${combinedMatch.name}" by ${combinedMatch.artists[0].name}`);
-        return {
-          ...combinedMatch,
-          recommendation: recommendation,
-          searchSuccess: true,
-          searchMethod: 'combined'
-        };
+        console.log(`✅ FOUND with Strategy 1: "${combinedMatch.name}" by ${combinedMatch.artists[0].name}`);
+        return { ...combinedMatch, recommendation, searchSuccess: true, searchMethod: 'exact-combined' };
       }
     }
     
-    // STRATEGY 2: Artist-first search
-    console.log(`📤 Artist-first search: "${recommendation.artist}"`);
-    const artistResults = await searchSpotifyTracks(recommendation.artist, accessToken, 50);
-    console.log(`📥 Artist search returned ${artistResults.length} results`);
+    // STRATEGY 2: Loose combined search
+    const looseQuery = `${recommendation.artist} ${recommendation.song}`;
+    console.log(`📤 Strategy 2 - Loose combined: ${looseQuery}`);
+    
+    const looseResults = await searchSpotifyTracks(looseQuery, accessToken, 30);
+    console.log(`📥 Strategy 2 returned ${looseResults.length} results`);
+    
+    if (looseResults.length > 0) {
+      const looseMatch = await findBestMatch(looseResults, recommendation, userTranscription);
+      if (looseMatch) {
+        console.log(`✅ FOUND with Strategy 2: "${looseMatch.name}" by ${looseMatch.artists[0].name}`);
+        return { ...looseMatch, recommendation, searchSuccess: true, searchMethod: 'loose-combined' };
+      }
+    }
+    
+    // STRATEGY 3: Artist-first search  
+    console.log(`📤 Strategy 3 - Artist first: "${recommendation.artist}"`);
+    const artistResults = await searchSpotifyTracks(`"${recommendation.artist}"`, accessToken, 50);
+    console.log(`📥 Strategy 3 returned ${artistResults.length} results`);
     
     if (artistResults.length > 0) {
       const artistMatch = await findBestMatch(artistResults, recommendation, userTranscription);
       if (artistMatch) {
-        console.log(`✅ FOUND with artist search: "${artistMatch.name}" by ${artistMatch.artists[0].name}`);
-        return {
-          ...artistMatch,
-          recommendation: recommendation,
-          searchSuccess: true,
-          searchMethod: 'artist-first'
-        };
+        console.log(`✅ FOUND with Strategy 3: "${artistMatch.name}" by ${artistMatch.artists[0].name}`);
+        return { ...artistMatch, recommendation, searchSuccess: true, searchMethod: 'artist-first' };
       }
     }
     
-    console.log(`❌ NO APPROPRIATE MATCHES FOUND for "${recommendation.song}" by "${recommendation.artist}"`);
-    return {
-      recommendation: recommendation,
-      searchSuccess: false,
-      error: 'No appropriate matches found'
-    };
+    // STRATEGY 4: Song-only search
+    if (recommendation.song.length > 3) {
+      console.log(`📤 Strategy 4 - Song only: "${recommendation.song}"`);
+      const songResults = await searchSpotifyTracks(`"${recommendation.song}"`, accessToken, 30);
+      console.log(`📥 Strategy 4 returned ${songResults.length} results`);
+      
+      if (songResults.length > 0) {
+        const songMatch = await findBestMatch(songResults, recommendation, userTranscription);
+        if (songMatch) {
+          console.log(`✅ FOUND with Strategy 4: "${songMatch.name}" by ${songMatch.artists[0].name}`);
+          return { ...songMatch, recommendation, searchSuccess: true, searchMethod: 'song-only' };
+        }
+      }
+    }
+    
+    console.log(`❌ NO MATCHES FOUND after all 4 strategies for "${recommendation.song}" by "${recommendation.artist}"`);
+    return { recommendation, searchSuccess: false, error: 'No matches found after all strategies' };
     
   } catch (error) {
-    console.error(`❌ Error finding track for "${recommendation.song}" by "${recommendation.artist}":`, error.message);
-    return {
-      recommendation: recommendation,
-      searchSuccess: false,
-      error: error.message
-    };
+    console.error(`❌ Error searching for "${recommendation.song}" by "${recommendation.artist}":`, error.message);
+    return { recommendation, searchSuccess: false, error: error.message };
   }
 }
-
 // Find tracks on Spotify based on AI recommendations
 async function findSpotifyTracks(songRecommendations, accessToken, userTranscription = '') {
   console.log(`🔍 Starting parallel Spotify search for ${songRecommendations.length} songs...`);
