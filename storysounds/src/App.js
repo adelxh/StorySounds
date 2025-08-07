@@ -1104,6 +1104,7 @@ const createSpotifyPlaylist = async () => {
                       <span className="button-text">
                         {isRecording ? `Recording... ${formatTime(recordingTime)}` : `Record The Vibe You're Feeling`}
                       </span>
+                     
                     </div>
                     {isRecording && (
                       <div className="recording-indicator">
@@ -1111,6 +1112,23 @@ const createSpotifyPlaylist = async () => {
                       </div>
                     )}
                   </button>
+                  {!spotifyAuth.isAuthenticated ? (
+                     <span className='spotify-sec'>
+                        <button  onClick={handleSpotifyLogin} disabled={spotifyAuth.isLoading} className='spotify-login-button'>Connect to Spotify</button>
+                        <p>🎯 Want better results? Connect your Spotify to boost accuracy by 50%..</p>
+                      </span>
+                  ) : (
+                    <div className='auth-success'>
+                      <div className='user-info'>
+                        <span className='welcome-text'>
+                          🎧 Connected as {spotifyAuth.user.display_name || spotifyAuth.user.id}
+
+                        </span>
+                        <button onClick={handleSpotifyLogout} className='logout-button'>Disconnect</button>
+                        </div>
+                      </div>
+                  )}
+                  
                 </div>
               )  : (
                 <div className="recording-results">
